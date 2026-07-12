@@ -1,4 +1,12 @@
 
+pub enum ArgError {
+    Help,
+    MissingOutputArg,
+    ConflictingModes,
+    NoModeSpecified,
+    MissingInput,
+}
+
 pub struct Config {
     pub input_file: String,
     pub output_file: Option<String>,
@@ -10,8 +18,7 @@ pub fn print_usage(program_name: &str) {
     println!("Usage: {} [-c] [-x] [-o <output>] <input>", program_name);
 }
 
-pub fn process_args(args: Vec<String>) -> Config {
-    let program_name = args[0].clone();
+pub fn process_args(args: Vec<String>) -> Result<Config, ArgError> {
     let mut iter = args.into_iter().skip(1);
 
     let mut input: Option<String> = None;
@@ -22,8 +29,7 @@ pub fn process_args(args: Vec<String>) -> Config {
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "-h" => {
-                print_usage(&program_name);
-                std::process::exit(0);
+                return Err(ArgError::Help);
             }
             "-c" => {
                 compress = true;
@@ -35,9 +41,7 @@ pub fn process_args(args: Vec<String>) -> Config {
                 if let Some(value) = iter.next() {
                     output = Some(value);
                 } else {
-                    eprintln!("Error: -o option requires an argument");
-                    print_usage(&program_name);
-                    std::process::exit(1);
+                    return Err(ArgError::MissingOutputArg);
                 }
             }
             other => {
@@ -46,14 +50,20 @@ pub fn process_args(args: Vec<String>) -> Config {
         }
     }
 
+    if compress && decompress {
+        return Err(ArgError::ConflictingModes);
+    }
+
+    if !compress && !decompress {
+        return Err(ArgError::NoModeSpecified);
+    }
+
     let input_file = match input {
         Some(file) => file,
         None => {
-            eprintln!("Error: Missing input file");
-            print_usage(&program_name);
-            std::process::exit(1);
+            return Err(ArgError::MissingInput);
         }
     };
 
-    Config { input_file, output_file: output, compress, decompress }
+    Ok(Config { input_file, output_file: output, compress, decompress })
 }

@@ -8,14 +8,8 @@ pub fn open_file(path: &str) -> Result<File, std::io::Error> {
     Ok(file)
 }
 
-pub fn get_chunk(file: &mut File) -> Vec<u8> {
+pub fn get_chunk(file: &mut File) -> Result<Vec<u8>, std::io::Error> {
     let mut chunk = vec![0u8; CHUNK_SIZE];
-    let bytes_read = match file.read(&mut chunk) {
-        Ok(n) => n,
-        Err(e) => {
-            eprintln!("Error reading file: {}", e);
-            std::process::exit(1);
-        }
-    };
-    return chunk;
+    file.read(&mut chunk)?;
+    Ok(chunk)
 }
