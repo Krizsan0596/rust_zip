@@ -11,7 +11,8 @@ pub fn open_file(path: &str) -> Result<File, io::Error> {
 
 pub fn get_chunk(file: &mut File) -> Result<Vec<u8>, io::Error> {
     let mut chunk = vec![0u8; CHUNK_SIZE];
-    file.read(&mut chunk)?;
+    let n = file.read(&mut chunk)?;
+    chunk.truncate(n);
     Ok(chunk)
 }
 
