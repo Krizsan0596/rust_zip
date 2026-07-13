@@ -42,18 +42,18 @@ fn main() {
 
     let mut file: File = match open_file(&opts.input_file) {
         Ok(file) => file,
-        Err(_e) => {
-            eprintln!("Input file does not exist!");
-            print_usage(&name);
+        Err(e) => {
+            eprintln!("Error opening file '{}': {}", opts.input_file, e);
             std::process::exit(1);
         }
     };
 
-    let _chunk: Vec<u8> = match get_chunk(&mut file) {
+    let chunk: Vec<u8> = match get_chunk(&mut file) {
         Ok(chunk) => chunk,
         Err(e) => {
             eprintln!("Error reading file: {}", e);
             std::process::exit(1);
         }
     };
+
 }
