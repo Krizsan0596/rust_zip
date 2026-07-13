@@ -5,6 +5,8 @@ mod file;
 use file::{open_file, get_chunk};
 use std::fs::File;
 
+use crate::file::create_output;
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let name: String = args[0].clone();
@@ -40,20 +42,28 @@ fn main() {
         }
     };
 
-    let mut file: File = match open_file(&opts.input_file) {
+    let mut input_file: File = match open_file(&opts.input_file) {
         Ok(file) => file,
-        Err(_e) => {
-            eprintln!("Input file does not exist!");
-            print_usage(&name);
+        Err(e) => {
+            eprintln!("Error opening file '{}': {}", opts.input_file, e);
             std::process::exit(1);
         }
     };
 
-    let _chunk: Vec<u8> = match get_chunk(&mut file) {
+    let mut output_file: File = match create_output(&opts.output_file){
+        Ok(file) => file,
+        Err(e) => {
+            eprintln!("Error creating file '{}': {}", opts.output_file, e);
+            std::process::exit(1);
+        }
+    };
+
+    let chunk: Vec<u8> = match get_chunk(&mut input_file) {
         Ok(chunk) => chunk,
         Err(e) => {
             eprintln!("Error reading file: {}", e);
             std::process::exit(1);
         }
     };
+
 }

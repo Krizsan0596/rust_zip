@@ -9,7 +9,7 @@ pub enum ArgError {
 
 pub struct Config {
     pub input_file: String,
-    pub output_file: Option<String>,
+    pub output_file: String,
     pub compress: bool,
     pub decompress: bool,
 }
@@ -65,5 +65,12 @@ pub fn process_args(args: Vec<String>) -> Result<Config, ArgError> {
         }
     };
 
-    Ok(Config { input_file, output_file: output, compress, decompress })
+    let output_file = match output {
+        Some(file) => file,
+        None => {
+            return Err(ArgError::MissingOutputArg);
+        }
+    };
+
+    Ok(Config { input_file, output_file, compress, decompress })
 }
