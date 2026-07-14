@@ -35,7 +35,8 @@ impl Node {
 
 pub struct Tree {
     pub root: Option<usize>,
-    pub nodes: Vec<Node>,
+    nodes: Vec<Node>,
+    cache: Box<[Option<String>; 256]>,
 }
 
 impl Tree {
@@ -43,7 +44,12 @@ impl Tree {
         Tree {
             root: None,
             nodes: Vec::new(),
+            cache: vec![None; 256].into_boxed_slice().try_into().unwrap(),
         }
+    }
+
+    pub fn get_node(&mut self, idx: usize) -> &mut Node {
+        return &mut self.nodes[idx];
     }
 
     pub fn add_leaf(&mut self, value: u8) {
@@ -87,7 +93,7 @@ impl Tree {
         let mut current_leaf: usize = 0;
         let mut current_branch: usize = leaf_count;
 
-        let mut next_node = |leaf: &mut usize, branch: &mut usize, nodes: &[Node]| -> usize {
+        let next_node = |leaf: &mut usize, branch: &mut usize, nodes: &[Node]| -> usize {
                 if *leaf < leaf_count
                     && (*branch == nodes.len() || nodes[*leaf].frequency() <= nodes[*branch].frequency())
                 {
@@ -107,8 +113,18 @@ impl Tree {
 
             let freq: u64 = self.nodes[left].frequency() + self.nodes[right].frequency();
             self.nodes.push(Node::Branch(Branch::new(freq, left as u64, right as u64)));
+            self.root = Some(self.nodes.len());
         }
 
         Ok(())
+    }
+
+    fn check_cache(&self, leaf: u8) -> Option<&String> {
+        if let Some(res) = &self.cache[leaf as usize] {
+            return Some(res);
+        }
+        else {
+            return None;
+        }
     }
 }
