@@ -83,6 +83,7 @@ impl Tree {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Input file is empty."));
         }
         if self.nodes.len() == 1 {
+            self.root = Some(0);
             return Ok(());
         }
 
@@ -113,7 +114,7 @@ impl Tree {
 
             let freq: u64 = self.nodes[left].frequency() + self.nodes[right].frequency();
             self.nodes.push(Node::Branch(Branch::new(freq, left as u64, right as u64)));
-            self.root = Some(self.nodes.len());
+            self.root = Some(self.nodes.len() - 1);
         }
 
         Ok(())

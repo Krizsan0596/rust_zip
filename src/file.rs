@@ -39,7 +39,7 @@ pub fn write_chunk(file: &mut File, chunk: &[u8]) -> Result<(), io::Error> {
     Ok(())
 }
 
-struct BitWriter<'a> {
+pub struct BitWriter<'a> {
     buffer: &'a mut Vec<u8>,
     byte: u8,
     bit_count: u8
@@ -49,6 +49,7 @@ impl<'a> BitWriter<'a> {
     pub fn new(dest: &'a mut Vec<u8>) -> Self {
         BitWriter { buffer: dest, byte: 0, bit_count: 0 }
     }
+
     pub fn push(&mut self, bits: &String) {
         for char in bits.chars() {
             if char == '0' {
@@ -61,8 +62,13 @@ impl<'a> BitWriter<'a> {
             
             if self.bit_count >= 8 {
                 self.buffer.push(self.byte);
-                self.byte = 0;
+                self.bit_count = 0;
             }
         }
+    }
+
+    pub fn flush(&mut self) {
+        self.buffer.push(self.byte);
+        self.bit_count = 0;
     }
 }
