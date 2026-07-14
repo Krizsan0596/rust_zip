@@ -1,16 +1,36 @@
 struct Leaf {
-    data: u8,
     frequency: u64,
+    data: u8,
 }
 
 struct Branch {
+    frequency: u64,
     left: u64,
     right: u64,
+}
+
+impl Branch {
+    fn new(frequency: u64, left: u64, right: u64) -> Self {
+        Branch {
+            frequency,
+            left,
+            right,
+        }
+    }
 }
 
 enum Node {
     Leaf(Leaf),
     Branch(Branch),
+}
+
+impl Node {
+    fn frequency(&self) -> u64 {
+        match self {
+            Node::Leaf(leaf) => leaf.frequency,
+            Node::Branch(branch) => branch.frequency,
+        }
+    }
 }
 
 pub struct Tree {
@@ -50,5 +70,45 @@ impl Tree {
             (Node::Leaf(a), Node::Leaf(b)) => b.frequency.cmp(&a.frequency),
             _ => std::cmp::Ordering::Equal,
         });
+    }
+
+    pub fn construct_tree(&mut self) -> Result<(), std::io::Error> {
+        if self.nodes.is_empty() {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Input file is empty."));
+        }
+        if self.nodes.len() == 1 {
+            return Ok(());
+        }
+
+        let leaf_count:usize = self.nodes.len();
+        self.nodes.reserve(self.nodes.len() - 1); // Huffman tree with n leaves has 2n-1 nodes.
+
+        
+        let mut current_leaf: usize = 0;
+        let mut current_branch: usize = leaf_count;
+
+        let mut next_node = |leaf: &mut usize, branch: &mut usize, nodes: &[Node]| -> usize {
+                if *leaf < leaf_count
+                    && (*branch == nodes.len() || nodes[*leaf].frequency() <= nodes[*branch].frequency())
+                {
+                    let idx = *leaf;
+                    *leaf += 1;
+                    idx
+                } else {
+                    let idx = *branch;
+                    *branch += 1;
+                    idx
+                }
+            };
+
+        for _ in 0..leaf_count-1 {
+            let left = next_node(&mut current_leaf, &mut current_branch, &self.nodes);
+            let right = next_node(&mut current_leaf, &mut current_branch, &self.nodes);
+
+            let freq: u64 = self.nodes[left].frequency() + self.nodes[right].frequency();
+            self.nodes.push(Node::Branch(Branch::new(freq, left as u64, right as u64)));
+        }
+
+        Ok(())
     }
 }
