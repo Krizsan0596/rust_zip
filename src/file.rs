@@ -38,3 +38,43 @@ pub fn write_chunk(file: &mut File, chunk: &[u8]) -> Result<(), io::Error> {
     file.write_all(chunk)?;
     Ok(())
 }
+
+pub struct BitWriter<'a> {
+    buffer: &'a mut Vec<u8>,
+    byte: u8,
+    bit_count: u8
+}
+
+impl<'a> BitWriter<'a> {
+    pub fn new(dest: &'a mut Vec<u8>) -> Self {
+        BitWriter { buffer: dest, byte: 0, bit_count: 0 }
+    }
+
+    pub fn push(&mut self, bits: &str) {
+        for b in bits.bytes() {
+            match b {
+                b'0' => self.byte <<= 1,
+                b'1' => self.byte = (self.byte << 1) | 1,
+                _ => continue,
+            }
+
+            self.bit_count += 1;
+            if self.bit_count == 8 {
+                self.buffer.push(self.byte);
+                self.byte = 0;
+                self.bit_count = 0;
+            }
+        }
+    }
+
+    pub fn flush(&mut self) {
+        if self.bit_count == 0 {
+            return;
+        }
+
+        self.byte <<= 8 - self.bit_count;
+        self.buffer.push(self.byte);
+        self.byte = 0;
+        self.bit_count = 0;
+    }
+}

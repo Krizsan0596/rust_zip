@@ -2,10 +2,11 @@ mod util;
 use util::{Config, process_args, print_usage, ArgError};
 
 mod file;
-use file::{open_file, get_chunk};
+use file::{open_file, get_chunk, create_output, write_chunk, BitWriter};
 use std::fs::File;
 
-use crate::file::create_output;
+mod huffman;
+use huffman::Tree;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -61,9 +62,40 @@ fn main() {
     let chunk: Vec<u8> = match get_chunk(&mut input_file) {
         Ok(chunk) => chunk,
         Err(e) => {
-            eprintln!("Error reading file: {}", e);
+            eprintln!("Error reading file '{}': {}", &opts.input_file, e);
             std::process::exit(1);
         }
     };
+    
+    let mut tree: Tree = Tree::new();
+    
+    for byte in &chunk {
+        tree.add_leaf(*byte);
+    }
 
+    tree.sort_nodes();
+    if let Err(e) = tree.construct_tree() {
+        eprintln!("Error while constructing Huffman tree: {}", e);
+        std::process::exit(1);
+    }
+
+    let mut buffer = Vec::new();
+
+    let mut writer = BitWriter::new(&mut buffer);
+    for byte in &chunk {
+        let bits: String = match tree.find_leaf(*byte, None) {
+            Some(bits) => bits.chars().rev().collect(),
+            None => {
+                eprintln!("Error: missing Huffman code for byte 0x{:02x}", byte);
+                std::process::exit(1);
+            }
+        };
+        writer.push(&bits);
+    }
+    writer.flush();
+
+    if let Err(e) = write_chunk(&mut output_file, &buffer) {
+        eprintln!("Error writing file '{}': {}", &opts.output_file, e);
+        std::process::exit(1);
+    }
 }
