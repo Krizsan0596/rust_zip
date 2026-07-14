@@ -127,4 +127,36 @@ impl Tree {
             return None;
         }
     }
+
+    pub fn find_leaf(&self, data: u8, root: Option<usize>) -> Option<String> { //Returns inverted
+                                                                               //path
+        let root: usize = root.unwrap_or(*self.root.as_ref().unwrap());
+        if root == *self.root.as_ref().unwrap() && let Some(path) = self.check_cache(data) {
+            return Some(path.clone());
+        }
+
+        return match &self.nodes[root] {
+            Node::Leaf(leaf) => {
+                if leaf.data == data {
+                    Some(String::new())
+                }
+                else {
+                    None
+                }
+            }
+            Node::Branch(branch) => {
+                if let Some(mut x) = self.find_leaf(data, Some(branch.left as usize)) {
+                    x.push('0');
+                    Some(x)
+                }
+                else if let Some(mut x) = self.find_leaf(data, Some(branch.right as usize)) {
+                    x.push('1');
+                    Some(x)
+                }
+                else {
+                    None
+                }
+            }
+        };
+    }
 }
