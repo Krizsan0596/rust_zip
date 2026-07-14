@@ -83,7 +83,14 @@ fn main() {
 
     let mut writer = BitWriter::new(&mut buffer);
     for byte in &chunk {
-        writer.push(tree.find_leaf(*byte, None).as_ref().unwrap());
+        let bits: String = match tree.find_leaf(*byte, None) {
+            Some(bits) => bits.chars().rev().collect(),
+            None => {
+                eprintln!("Error: missing Huffman code for byte 0x{:02x}", byte);
+                std::process::exit(1);
+            }
+        };
+        writer.push(&bits);
     }
     writer.flush();
 

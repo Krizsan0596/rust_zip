@@ -72,10 +72,7 @@ impl Tree {
     }
 
     pub fn sort_nodes(&mut self) {
-        self.nodes.sort_unstable_by(|a, b| match (a, b) {
-            (Node::Leaf(a), Node::Leaf(b)) => b.frequency.cmp(&a.frequency),
-            _ => std::cmp::Ordering::Equal,
-        });
+        self.nodes.sort_unstable_by(|a, b| a.frequency().cmp(&b.frequency()));
     }
 
     pub fn construct_tree(&mut self) -> Result<(), std::io::Error> {

@@ -50,25 +50,31 @@ impl<'a> BitWriter<'a> {
         BitWriter { buffer: dest, byte: 0, bit_count: 0 }
     }
 
-    pub fn push(&mut self, bits: &String) {
-        for char in bits.chars() {
-            if char == '0' {
-                self.byte = self.byte << 1;
+    pub fn push(&mut self, bits: &str) {
+        for b in bits.bytes() {
+            match b {
+                b'0' => self.byte <<= 1,
+                b'1' => self.byte = (self.byte << 1) | 1,
+                _ => continue,
             }
-            else if char == '1' {
-                self.byte = (self.byte << 1) | 1;
-            }
+
             self.bit_count += 1;
-            
-            if self.bit_count >= 8 {
+            if self.bit_count == 8 {
                 self.buffer.push(self.byte);
+                self.byte = 0;
                 self.bit_count = 0;
             }
         }
     }
 
     pub fn flush(&mut self) {
+        if self.bit_count == 0 {
+            return;
+        }
+
+        self.byte <<= 8 - self.bit_count;
         self.buffer.push(self.byte);
+        self.byte = 0;
         self.bit_count = 0;
     }
 }
