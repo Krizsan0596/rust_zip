@@ -2,10 +2,10 @@ mod util;
 use util::{Config, process_args, print_usage, ArgError};
 
 mod file;
-use file::{open_file, get_chunk};
+use file::{open_file, get_chunk, create_output, write_chunk};
 use std::fs::File;
 
-use crate::file::create_output;
+mod huffman;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

@@ -8,9 +8,9 @@ struct Branch {
     right: u64,
 }
 
-pub enum Node {
-    Leaf,
-    Branch,
+enum Node {
+    Leaf(Leaf),
+    Branch(Branch),
 }
 
 pub struct Tree {
@@ -27,11 +27,28 @@ impl Tree {
     }
 
     pub fn add_leaf(&mut self, value: u8) {
-        let idx = self.nodes.len();
-        self.nodes.push(Node::Leaf(value));
+        if let Some(node) = self.nodes.iter_mut().find(|node| {
+            match node {
+                Node::Leaf(leaf) => leaf.data == value,
+                _ => false,
+            }
+        }) {
+            if let Node::Leaf(leaf) = node {
+                leaf.frequency += 1;
+            }
+        }
+        else {
+            self.nodes.push(Node::Leaf(Leaf {
+                data: value,
+                frequency: 1,
+            }));
+        }
     }
 
     pub fn sort_nodes(&mut self) {
-        self.nodes.sort_unstable_by(|a, b| b.frequency.cmp(&a.frequency));
+        self.nodes.sort_unstable_by(|a, b| match (a, b) {
+            (Node::Leaf(a), Node::Leaf(b)) => b.frequency.cmp(&a.frequency),
+            _ => std::cmp::Ordering::Equal,
+        });
     }
 }
