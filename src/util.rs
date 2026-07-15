@@ -1,3 +1,4 @@
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ArgError {
     Help,
     MissingOutputArg,
@@ -6,6 +7,7 @@ pub enum ArgError {
     MissingInput,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
     pub input_file: String,
     pub output_file: String,
@@ -93,11 +95,15 @@ mod tests {
             "out".to_string(),
             "input".to_string(),
         ];
-        let config = process_args(args).ok().unwrap();
-        assert_eq!(config.input_file, "input");
-        assert_eq!(config.output_file, "out");
-        assert!(config.compress);
-        assert!(!config.decompress);
+        assert_eq!(
+            process_args(args),
+            Ok(Config {
+                input_file: "input".to_string(),
+                output_file: "out".to_string(),
+                compress: true,
+                decompress: false,
+            })
+        );
     }
 
     #[test]
@@ -109,26 +115,27 @@ mod tests {
             "out".to_string(),
             "input".to_string(),
         ];
-        let config = process_args(args).ok().unwrap();
-        assert_eq!(config.input_file, "input");
-        assert_eq!(config.output_file, "out");
-        assert!(!config.compress);
-        assert!(config.decompress);
+        assert_eq!(
+            process_args(args),
+            Ok(Config {
+                input_file: "input".to_string(),
+                output_file: "out".to_string(),
+                compress: false,
+                decompress: true,
+            })
+        );
     }
 
     #[test]
     fn test_help() {
         let args = vec!["prog".to_string(), "-h".to_string()];
-        assert!(matches!(process_args(args), Err(ArgError::Help)));
+        assert_eq!(process_args(args), Err(ArgError::Help));
     }
 
     #[test]
     fn test_missing_output_arg_flag_only() {
         let args = vec!["prog".to_string(), "-c".to_string(), "-o".to_string()];
-        assert!(matches!(
-            process_args(args),
-            Err(ArgError::MissingOutputArg)
-        ));
+        assert_eq!(process_args(args), Err(ArgError::MissingOutputArg));
     }
 
     #[test]
@@ -139,10 +146,7 @@ mod tests {
             "input".to_string(),
             "-o".to_string(),
         ];
-        assert!(matches!(
-            process_args(args),
-            Err(ArgError::MissingOutputArg)
-        ));
+        assert_eq!(process_args(args), Err(ArgError::MissingOutputArg));
     }
 
     #[test]
@@ -155,10 +159,7 @@ mod tests {
             "out".to_string(),
             "input".to_string(),
         ];
-        assert!(matches!(
-            process_args(args),
-            Err(ArgError::ConflictingModes)
-        ));
+        assert_eq!(process_args(args), Err(ArgError::ConflictingModes));
     }
 
     #[test]
@@ -169,7 +170,7 @@ mod tests {
             "out".to_string(),
             "input".to_string(),
         ];
-        assert!(matches!(process_args(args), Err(ArgError::NoModeSpecified)));
+        assert_eq!(process_args(args), Err(ArgError::NoModeSpecified));
     }
 
     #[test]
@@ -180,7 +181,7 @@ mod tests {
             "-o".to_string(),
             "out".to_string(),
         ];
-        assert!(matches!(process_args(args), Err(ArgError::MissingInput)));
+        assert_eq!(process_args(args), Err(ArgError::MissingInput));
     }
 
     #[test]
@@ -193,10 +194,14 @@ mod tests {
             "input1".to_string(),
             "input2".to_string(),
         ];
-        let config = process_args(args).ok().unwrap();
-        assert_eq!(config.input_file, "input2");
-        assert_eq!(config.output_file, "out");
-        assert!(config.compress);
-        assert!(!config.decompress);
+        assert_eq!(
+            process_args(args),
+            Ok(Config {
+                input_file: "input2".to_string(),
+                output_file: "out".to_string(),
+                compress: true,
+                decompress: false,
+            })
+        );
     }
 }

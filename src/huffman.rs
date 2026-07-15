@@ -1,11 +1,12 @@
 use crate::file::BitReader;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Leaf {
     pub frequency: u64,
     pub data: u8,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Branch {
     frequency: u64,
     left: u64,
@@ -22,6 +23,7 @@ impl Branch {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Node {
     Leaf(Leaf),
     Branch(Branch),
@@ -209,34 +211,37 @@ mod tests {
         let mut tree = Tree::new();
 
         tree.add_leaf(b'A');
-        assert_eq!(tree.nodes.len(), 1);
-        match &tree.nodes[0] {
-            Node::Leaf(leaf) => {
-                assert_eq!(leaf.data, b'A');
-                assert_eq!(leaf.frequency, 1);
-            }
-            _ => panic!("Expected a leaf node"),
-        }
+        assert_eq!(
+            tree.nodes,
+            vec![Node::Leaf(Leaf {
+                data: b'A',
+                frequency: 1
+            })]
+        );
 
         tree.add_leaf(b'A');
-        assert_eq!(tree.nodes.len(), 1);
-        match &tree.nodes[0] {
-            Node::Leaf(leaf) => {
-                assert_eq!(leaf.data, b'A');
-                assert_eq!(leaf.frequency, 2);
-            }
-            _ => panic!("Expected a leaf node"),
-        }
+        assert_eq!(
+            tree.nodes,
+            vec![Node::Leaf(Leaf {
+                data: b'A',
+                frequency: 2
+            })]
+        );
 
         tree.add_leaf(b'B');
-        assert_eq!(tree.nodes.len(), 2);
-        match &tree.nodes[1] {
-            Node::Leaf(leaf) => {
-                assert_eq!(leaf.data, b'B');
-                assert_eq!(leaf.frequency, 1);
-            }
-            _ => panic!("Expected a leaf node"),
-        }
+        assert_eq!(
+            tree.nodes,
+            vec![
+                Node::Leaf(Leaf {
+                    data: b'A',
+                    frequency: 2
+                }),
+                Node::Leaf(Leaf {
+                    data: b'B',
+                    frequency: 1
+                }),
+            ]
+        );
     }
 
     #[test]
@@ -254,18 +259,23 @@ mod tests {
 
         tree.sort_nodes();
 
-        assert_eq!(tree.nodes.len(), 3);
-
-        let get_leaf_data_and_freq = |node: &Node| -> (u8, u64) {
-            match node {
-                Node::Leaf(leaf) => (leaf.data, leaf.frequency),
-                _ => panic!("Expected leaf"),
-            }
-        };
-
-        assert_eq!(get_leaf_data_and_freq(&tree.nodes[0]), (b'B', 1));
-        assert_eq!(get_leaf_data_and_freq(&tree.nodes[1]), (b'C', 2));
-        assert_eq!(get_leaf_data_and_freq(&tree.nodes[2]), (b'A', 3));
+        assert_eq!(
+            tree.nodes,
+            vec![
+                Node::Leaf(Leaf {
+                    data: b'B',
+                    frequency: 1
+                }),
+                Node::Leaf(Leaf {
+                    data: b'C',
+                    frequency: 2
+                }),
+                Node::Leaf(Leaf {
+                    data: b'A',
+                    frequency: 3
+                }),
+            ]
+        );
     }
 
     #[test]
@@ -408,5 +418,25 @@ mod tests {
 
         let copied_leaf = leaf;
         assert_eq!(copied_leaf, leaf);
+    }
+
+    #[test]
+    fn test_node_clone_and_copy() {
+        let leaf = Node::Leaf(Leaf {
+            data: b'A',
+            frequency: 10,
+        });
+        let cloned_node = leaf.clone();
+        assert_eq!(cloned_node, leaf);
+
+        let copied_node = leaf;
+        assert_eq!(copied_node, leaf);
+
+        let branch = Node::Branch(Branch::new(100, 1, 2));
+        let cloned_branch = branch.clone();
+        assert_eq!(cloned_branch, branch);
+
+        let copied_branch = branch;
+        assert_eq!(copied_branch, branch);
     }
 }

@@ -444,9 +444,7 @@ mod tests {
         let read_res = huffman_file::read(written_bytes.clone(), &mut read_buffer);
         assert!(read_res.is_ok());
         let read_file = read_res.unwrap();
-        assert_eq!(read_file.magic_number, MAGIC_NUMBER);
-        assert_eq!(read_file.leaf_count, h_file.leaf_count);
-        assert_eq!(read_file.leaves, h_file.leaves);
+        assert_eq!(read_file, h_file);
         assert_eq!(read_buffer, compressed_data);
 
         // 2. Failure: input too short
