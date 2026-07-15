@@ -137,3 +137,187 @@ impl<'a> BitReader<'a> {
     //     Some(out)
     // }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_bit_writer_basic_push() {
+        let mut buffer = Vec::new();
+        let mut writer = BitWriter::new(&mut buffer);
+        writer.push("101");
+        assert!(writer.buffer.is_empty());
+        writer.flush();
+        assert_eq!(*writer.buffer, vec![160]);
+    }
+
+    #[test]
+    fn test_bit_writer_multiple_bytes() {
+        let mut buffer = Vec::new();
+        let mut writer = BitWriter::new(&mut buffer);
+        
+        writer.push("11111111");
+        assert_eq!(*writer.buffer, vec![255]);
+
+        writer.push("00000000");
+        assert_eq!(*writer.buffer, vec![255, 0]);
+
+        writer.push("1010");
+        assert_eq!(*writer.buffer, vec![255, 0]);
+
+        writer.flush();
+        // 10100000 == 160
+        assert_eq!(*writer.buffer, vec![255, 0, 160]);
+    }
+
+    #[test]
+    fn test_bit_writer_flush_empty() {
+        let mut buffer = Vec::new();
+        let mut writer = BitWriter::new(&mut buffer);
+        writer.flush();
+        assert!(writer.buffer.is_empty());
+
+        writer.push("1");
+        writer.flush();
+        assert_eq!(*writer.buffer, vec![128]);
+
+        writer.flush();
+        assert_eq!(*writer.buffer, vec![128]);
+    }
+
+    #[test]
+    fn test_bit_reader_basic() {
+        let buffer = vec![160]; // 10100000
+        let mut reader = BitReader::new(&buffer);
+
+        assert_eq!(reader.read_bit(), Some(true));
+        assert_eq!(reader.read_bit(), Some(false));
+        assert_eq!(reader.read_bit(), Some(true));
+        assert_eq!(reader.read_bit(), Some(false));
+        assert_eq!(reader.read_bit(), Some(false));
+        assert_eq!(reader.read_bit(), Some(false));
+        assert_eq!(reader.read_bit(), Some(false));
+        assert_eq!(reader.read_bit(), Some(false));
+        assert_eq!(reader.read_bit(), None);
+    }
+
+    #[test]
+    fn test_bit_reader_empty() {
+        let buffer = Vec::new();
+        let mut reader = BitReader::new(&buffer);
+        assert_eq!(reader.read_bit(), None);
+    }
+
+    #[test]
+    fn test_bit_reader_multiple_bytes() {
+        let buffer = vec![255, 0];
+        let mut reader = BitReader::new(&buffer);
+
+        for _ in 0..8 {
+            assert_eq!(reader.read_bit(), Some(true));
+        }
+        for _ in 0..8 {
+            assert_eq!(reader.read_bit(), Some(false));
+        }
+        assert_eq!(reader.read_bit(), None);
+    }
+
+    #[test]
+    fn test_round_trip() {
+        let mut buffer = Vec::new();
+        let bit_string = "110110001100101"; // 15 bits
+        {
+            let mut writer = BitWriter::new(&mut buffer);
+            writer.push(bit_string);
+            writer.flush();
+        }
+
+        let mut reader = BitReader::new(&buffer);
+        let mut decoded = String::new();
+        
+        for _ in 0..15 {
+            match reader.read_bit() {
+                Some(true) => decoded.push('1'),
+                Some(false) => decoded.push('0'),
+                None => break,
+            }
+        }
+        assert_eq!(decoded, bit_string);
+
+        assert_eq!(reader.read_bit(), Some(false));
+        
+        assert_eq!(reader.read_bit(), None);
+    }
+
+    #[test]
+    fn test_open_file_succeeds_and_fails() {
+        // Test fails on non-existent file
+        let res = open_file("non_existent_file_path_123.tmp");
+        assert!(res.is_err());
+
+        // Test succeeds on existing file
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let path = file.path().to_str().unwrap();
+        std::fs::write(path, b"test data").unwrap();
+
+        let res = open_file(path);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_get_chunk_exact_bytes() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let path = file.path().to_str().unwrap();
+        let test_data = b"hello world";
+        std::fs::write(path, test_data).unwrap();
+
+        let mut opened_file = open_file(path).unwrap();
+        let chunk = get_chunk(&mut opened_file).unwrap();
+        assert_eq!(chunk, test_data);
+    }
+
+    #[test]
+    fn test_get_chunk_truncates_at_eof() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let path = file.path().to_str().unwrap();
+        let test_data = vec![b'A'; 100];
+        std::fs::write(path, &test_data).unwrap();
+
+        let mut opened_file = open_file(path).unwrap();
+        
+        let chunk1 = get_chunk(&mut opened_file).unwrap();
+        assert_eq!(chunk1, test_data);
+        assert_eq!(chunk1.len(), 100);
+
+        let chunk2 = get_chunk(&mut opened_file).unwrap();
+        assert!(chunk2.is_empty());
+    }
+
+    #[test]
+    fn test_write_chunk_exact_bytes() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let path = file.path().to_str().unwrap();
+
+        let mut opened_file = File::create(path).unwrap();
+        let data = b"some random bytes to write";
+        write_chunk(&mut opened_file, data).unwrap();
+        drop(opened_file);
+
+        let read_data = std::fs::read(path).unwrap();
+        assert_eq!(read_data, data);
+    }
+
+    #[test]
+    fn test_create_output_new_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("new_file.tmp");
+
+        let res = create_output(path.to_str().unwrap());
+        assert!(res.is_ok());
+        assert!(path.exists());
+    }
+}
+
+

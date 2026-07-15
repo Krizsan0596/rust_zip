@@ -78,3 +78,121 @@ pub fn process_args(args: Vec<String>) -> Result<Config, ArgError> {
         decompress,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_valid_compression() {
+        let args = vec![
+            "prog".to_string(),
+            "-c".to_string(),
+            "-o".to_string(),
+            "out".to_string(),
+            "input".to_string(),
+        ];
+        let config = process_args(args).ok().unwrap();
+        assert_eq!(config.input_file, "input");
+        assert_eq!(config.output_file, "out");
+        assert!(config.compress);
+        assert!(!config.decompress);
+    }
+
+    #[test]
+    fn test_valid_decompression() {
+        let args = vec![
+            "prog".to_string(),
+            "-x".to_string(),
+            "-o".to_string(),
+            "out".to_string(),
+            "input".to_string(),
+        ];
+        let config = process_args(args).ok().unwrap();
+        assert_eq!(config.input_file, "input");
+        assert_eq!(config.output_file, "out");
+        assert!(!config.compress);
+        assert!(config.decompress);
+    }
+
+    #[test]
+    fn test_help() {
+        let args = vec!["prog".to_string(), "-h".to_string()];
+        assert!(matches!(process_args(args), Err(ArgError::Help)));
+    }
+
+    #[test]
+    fn test_missing_output_arg_flag_only() {
+        let args = vec![
+            "prog".to_string(),
+            "-c".to_string(),
+            "-o".to_string(),
+        ];
+        assert!(matches!(process_args(args), Err(ArgError::MissingOutputArg)));
+    }
+
+    #[test]
+    fn test_missing_output_arg_value() {
+        let args = vec![
+            "prog".to_string(),
+            "-c".to_string(),
+            "input".to_string(),
+            "-o".to_string(),
+        ];
+        assert!(matches!(process_args(args), Err(ArgError::MissingOutputArg)));
+    }
+
+    #[test]
+    fn test_conflicting_modes() {
+        let args = vec![
+            "prog".to_string(),
+            "-c".to_string(),
+            "-x".to_string(),
+            "-o".to_string(),
+            "out".to_string(),
+            "input".to_string(),
+        ];
+        assert!(matches!(process_args(args), Err(ArgError::ConflictingModes)));
+    }
+
+    #[test]
+    fn test_no_mode() {
+        let args = vec![
+            "prog".to_string(),
+            "-o".to_string(),
+            "out".to_string(),
+            "input".to_string(),
+        ];
+        assert!(matches!(process_args(args), Err(ArgError::NoModeSpecified)));
+    }
+
+    #[test]
+    fn test_missing_input() {
+        let args = vec![
+            "prog".to_string(),
+            "-c".to_string(),
+            "-o".to_string(),
+            "out".to_string(),
+        ];
+        assert!(matches!(process_args(args), Err(ArgError::MissingInput)));
+    }
+
+    #[test]
+    fn test_repeated_positional_args() {
+        let args = vec![
+            "prog".to_string(),
+            "-c".to_string(),
+            "-o".to_string(),
+            "out".to_string(),
+            "input1".to_string(),
+            "input2".to_string(),
+        ];
+        let config = process_args(args).ok().unwrap();
+        assert_eq!(config.input_file, "input2");
+        assert_eq!(config.output_file, "out");
+        assert!(config.compress);
+        assert!(!config.decompress);
+    }
+}
+
