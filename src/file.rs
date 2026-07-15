@@ -141,6 +141,7 @@ impl<'a> BitReader<'a> {
     // }
 }
 
+#[derive(Debug, PartialEq)]
 pub struct huffman_file<'a> {
     magic_number: [u8; 4],
     leaf_count: u8,
@@ -184,17 +185,43 @@ impl<'a> huffman_file<'a> {
         to.extend_from_slice(self.compressed_data);
     }
 
-    pub fn read(from: Vec<u8>, buffer: &'a mut Vec<u8>) -> Self {
-        let mut cursor: usize = 4;
-        
+    pub fn read(from: Vec<u8>, buffer: &'a mut Vec<u8>) -> Result<Self, io::Error> {
+        if from.len() < 4 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "File too short to contain magic number",
+            ));
+        }
+
         let mut magic_number = [0u8; 4];
         magic_number.copy_from_slice(&from[0..4]);
 
+        if magic_number != MAGIC_NUMBER {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Invalid magic number",
+            ));
+        }
+
+        let mut cursor: usize = 4;
+        
+        if cursor >= from.len() {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "Unexpected EOF reading leaf count",
+            ));
+        }
         let leaf_count: u8 = from[cursor];
         cursor += 1;
 
         let mut leaves: Vec<Leaf> = Vec::with_capacity(leaf_count as usize);
         for _ in 0..leaf_count {
+            if cursor + 9 > from.len() {
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "Unexpected EOF reading leaf data",
+                ));
+            }
             let mut bytes = [0u8; 8];
             bytes.copy_from_slice(&from[cursor..cursor+8]);
             let byte = from[cursor+8];
@@ -207,13 +234,13 @@ impl<'a> huffman_file<'a> {
 
         buffer.extend_from_slice(&from[cursor..]);
 
-        Self { 
+        Ok(Self { 
             magic_number, 
             leaf_count, 
             leaves, 
             data_len: buffer.len() as u64, 
             compressed_data: buffer 
-        }
+        })
     }
 }
 
@@ -396,5 +423,49 @@ mod tests {
         let path_str = path.to_string_lossy();
         let _res = create_output(path_str.as_ref());
         assert!(path.exists());
+    }
+
+    #[test]
+    fn test_huffman_file_validation() {
+        // 1. Success case with valid round-trip
+        let mut tree = Tree::new();
+        tree.add_leaf(b'a');
+        tree.add_leaf(b'b');
+        tree.sort_nodes();
+        tree.construct_tree().unwrap();
+
+        let compressed_data = vec![1, 2, 3];
+        let h_file = huffman_file::new(&tree, &compressed_data);
+
+        let mut written_bytes = Vec::new();
+        h_file.write(&mut written_bytes);
+
+        let mut read_buffer = Vec::new();
+        let read_res = huffman_file::read(written_bytes.clone(), &mut read_buffer);
+        assert!(read_res.is_ok());
+        let read_file = read_res.unwrap();
+        assert_eq!(read_file.magic_number, MAGIC_NUMBER);
+        assert_eq!(read_file.leaf_count, h_file.leaf_count);
+        assert_eq!(read_file.leaves, h_file.leaves);
+        assert_eq!(read_buffer, compressed_data);
+
+        // 2. Failure: input too short
+        let short_bytes = vec![b'Z', b'I', b'P'];
+        let mut buf = Vec::new();
+        let err_res = huffman_file::read(short_bytes, &mut buf);
+        assert!(err_res.is_err());
+        let err = err_res.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("too short"));
+
+        // 3. Failure: wrong magic number
+        let mut wrong_magic = written_bytes.clone();
+        wrong_magic[0..4].copy_from_slice(b"ZIP2");
+        let mut buf = Vec::new();
+        let err_res = huffman_file::read(wrong_magic, &mut buf);
+        assert!(err_res.is_err());
+        let err = err_res.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("Invalid magic number"));
     }
 }
