@@ -1,5 +1,5 @@
-use std::process::Command;
 use std::fs;
+use std::process::Command;
 
 #[test]
 fn test_cli_decompression_panic() {

@@ -124,12 +124,11 @@ mod tests {
 
     #[test]
     fn test_missing_output_arg_flag_only() {
-        let args = vec![
-            "prog".to_string(),
-            "-c".to_string(),
-            "-o".to_string(),
-        ];
-        assert!(matches!(process_args(args), Err(ArgError::MissingOutputArg)));
+        let args = vec!["prog".to_string(), "-c".to_string(), "-o".to_string()];
+        assert!(matches!(
+            process_args(args),
+            Err(ArgError::MissingOutputArg)
+        ));
     }
 
     #[test]
@@ -140,7 +139,10 @@ mod tests {
             "input".to_string(),
             "-o".to_string(),
         ];
-        assert!(matches!(process_args(args), Err(ArgError::MissingOutputArg)));
+        assert!(matches!(
+            process_args(args),
+            Err(ArgError::MissingOutputArg)
+        ));
     }
 
     #[test]
@@ -153,7 +155,10 @@ mod tests {
             "out".to_string(),
             "input".to_string(),
         ];
-        assert!(matches!(process_args(args), Err(ArgError::ConflictingModes)));
+        assert!(matches!(
+            process_args(args),
+            Err(ArgError::ConflictingModes)
+        ));
     }
 
     #[test]
@@ -195,4 +200,3 @@ mod tests {
         assert!(!config.decompress);
     }
 }
-

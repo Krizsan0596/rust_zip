@@ -157,7 +157,7 @@ mod tests {
     fn test_bit_writer_multiple_bytes() {
         let mut buffer = Vec::new();
         let mut writer = BitWriter::new(&mut buffer);
-        
+
         writer.push("11111111");
         assert_eq!(*writer.buffer, vec![255]);
 
@@ -236,7 +236,7 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer);
         let mut decoded = String::new();
-        
+
         for _ in 0..15 {
             match reader.read_bit() {
                 Some(true) => decoded.push('1'),
@@ -247,7 +247,7 @@ mod tests {
         assert_eq!(decoded, bit_string);
 
         assert_eq!(reader.read_bit(), Some(false));
-        
+
         assert_eq!(reader.read_bit(), None);
     }
 
@@ -286,7 +286,7 @@ mod tests {
         std::fs::write(path, &test_data).unwrap();
 
         let mut opened_file = open_file(path).unwrap();
-        
+
         let chunk1 = get_chunk(&mut opened_file).unwrap();
         assert_eq!(chunk1, test_data);
         assert_eq!(chunk1.len(), 100);
@@ -319,5 +319,3 @@ mod tests {
         assert!(path.exists());
     }
 }
-
-

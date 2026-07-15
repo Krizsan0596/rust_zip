@@ -206,7 +206,7 @@ mod tests {
     #[test]
     fn test_add_leaf() {
         let mut tree = Tree::new();
-        
+
         tree.add_leaf(b'A');
         assert_eq!(tree.nodes.len(), 1);
         match &tree.nodes[0] {
@@ -241,7 +241,7 @@ mod tests {
     #[test]
     fn test_sort_nodes() {
         let mut tree = Tree::new();
-        
+
         tree.add_leaf(b'A');
         tree.add_leaf(b'A');
         tree.add_leaf(b'A');
@@ -254,7 +254,7 @@ mod tests {
         tree.sort_nodes();
 
         assert_eq!(tree.nodes.len(), 3);
-        
+
         let get_leaf_data_and_freq = |node: &Node| -> (u8, u64) {
             match node {
                 Node::Leaf(leaf) => (leaf.data, leaf.frequency),
@@ -308,7 +308,7 @@ mod tests {
         assert_eq!(tree.find_leaf(b'A', None), Some("0".to_string()));
         assert_eq!(tree.find_leaf(b'C', None), Some("01".to_string()));
         assert_eq!(tree.find_leaf(b'B', None), Some("11".to_string()));
-        
+
         assert_eq!(tree.find_leaf(b'D', None), None);
     }
 
@@ -331,7 +331,7 @@ mod tests {
 
         let buffer = Vec::new();
         let mut reader = BitReader::new(&buffer);
-        
+
         assert_eq!(tree.get_next_leaf(&mut reader), None);
     }
 
@@ -358,7 +358,7 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer);
         let mut decoded_bytes = Vec::new();
-        
+
         for _ in 0..input_bytes.len() {
             if let Some(byte) = tree.get_next_leaf(&mut reader) {
                 decoded_bytes.push(byte);
