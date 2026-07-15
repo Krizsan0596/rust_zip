@@ -1,8 +1,9 @@
 use crate::file::BitReader;
 
-struct Leaf {
-    frequency: u64,
-    data: u8,
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Leaf {
+    pub frequency: u64,
+    pub data: u8,
 }
 
 struct Branch {
@@ -21,7 +22,7 @@ impl Branch {
     }
 }
 
-enum Node {
+pub enum Node {
     Leaf(Leaf),
     Branch(Branch),
 }
@@ -37,7 +38,7 @@ impl Node {
 
 pub struct Tree {
     pub root: Option<usize>,
-    nodes: Vec<Node>,
+    pub nodes: Vec<Node>,
     cache: Box<[Option<String>; 256]>,
 }
 
@@ -394,5 +395,18 @@ mod tests {
         }
 
         assert!(buffer.is_empty());
+    }
+
+    #[test]
+    fn test_leaf_clone_and_copy() {
+        let leaf = Leaf {
+            data: b'A',
+            frequency: 10,
+        };
+        let cloned_leaf = leaf.clone();
+        assert_eq!(cloned_leaf, leaf);
+
+        let copied_leaf = leaf;
+        assert_eq!(copied_leaf, leaf);
     }
 }

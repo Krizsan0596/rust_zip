@@ -2,7 +2,10 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::Path;
 
+use crate::huffman::{Leaf, Node, Tree};
+
 const CHUNK_SIZE: usize = 1024 * 1024 * 8; // 8 MB
+const MAGIC_NUMBER: [u8; 4] = [b'Z', b'I', b'P', b'1'];
 
 pub fn open_file(path: &str) -> Result<File, io::Error> {
     let file = File::open(path)?;
@@ -136,6 +139,43 @@ impl<'a> BitReader<'a> {
     //
     //     Some(out)
     // }
+}
+
+struct huffman_file<'a> {
+    magic_number: [u8; 4],
+    leaves: Vec<Leaf>,
+    compressed_data: &'a Vec<u8>,
+}
+
+impl<'a> huffman_file<'a> {
+    pub fn new(tree: &Tree, data: &'a Vec<u8>) -> Self {
+        let mut new = huffman_file {
+            magic_number: MAGIC_NUMBER,
+            leaves: Vec::new(),
+            compressed_data: data,
+        };
+
+        let leaf_count = (tree.nodes.len() + 1) / 2;
+
+        new.leaves.reserve(leaf_count - new.leaves.len());
+
+        for idx in 0..leaf_count {
+            if let Node::Leaf(leaf) = tree.nodes[idx] {
+                new.leaves.push(leaf.clone());
+            }
+        }
+
+        return new;
+    }
+
+    pub fn write(&self, to: &mut Vec<u8>) {
+        to.extend_from_slice(&self.magic_number);
+        for leaf in &self.leaves {
+            to.extend_from_slice(&leaf.frequency.to_be_bytes());
+            to.push(leaf.data);
+        }
+        to.extend_from_slice(self.compressed_data);
+    }
 }
 
 #[cfg(test)]
