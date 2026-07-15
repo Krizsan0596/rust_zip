@@ -91,23 +91,24 @@ impl<'a> BitReader<'a> {
         BitReader { buffer: input, byte: 0, bit_count: 0, cursor: 0 }
     }
 
-    pub fn read_bit(&mut self) -> Option<bool> {
-        let bit: bool = match self.byte | (1 << (7 - self.bit_count)) {
-            0 => false,
-            _ => true,
-        };
-        
-        self.bit_count += 1;
-        if self.bit_count == 8 {
-            if self.cursor == self.buffer.len() {
-                return None;
-            }
-            self.byte = self.buffer[self.cursor];
-            self.cursor += 1;
+pub fn read_bit(&mut self) -> Option<bool> {
+    if self.bit_count == 0 {
+        if self.cursor == self.buffer.len() {
+            return None;
         }
-
-        return Some(bit);
+        self.byte = self.buffer[self.cursor];
+        self.cursor += 1;
     }
+
+    let bit = (self.byte & (1 << (7 - self.bit_count))) != 0;
+
+    self.bit_count += 1;
+    if self.bit_count == 8 {
+        self.bit_count = 0;
+    }
+
+    Some(bit)
+}
 
     pub fn read_bits(&mut self, count: u8) -> Option<String> {
         let mut out: String = String::new();

@@ -111,13 +111,13 @@ fn main() {
             output.push(byte);
         }
 
-        let mut output_file: File = match create_output(&opts.output_file) {
-            Ok(file) => file,
-            Err(e) => {
-                eprintln!("Error reading file '{}': {}", &opts.input_file, e);
-                std::process::exit(1);
-            }
-        };
+let mut output_file: File = match create_output(&opts.output_file) {
+    Ok(file) => file,
+    Err(e) => {
+        eprintln!("Error creating file '{}': {}", &opts.output_file, e);
+        std::process::exit(1);
+    }
+};
 
         if let Err(e) = write_chunk(&mut output_file, &output) {
             eprintln!("Error writing file '{}': {}", &opts.output_file, e);
