@@ -207,7 +207,6 @@ mod tests {
     fn test_add_leaf() {
         let mut tree = Tree::new();
         
-        // Add a new leaf
         tree.add_leaf(b'A');
         assert_eq!(tree.nodes.len(), 1);
         match &tree.nodes[0] {
@@ -218,7 +217,6 @@ mod tests {
             _ => panic!("Expected a leaf node"),
         }
 
-        // Add the same leaf again (increment frequency)
         tree.add_leaf(b'A');
         assert_eq!(tree.nodes.len(), 1);
         match &tree.nodes[0] {
@@ -229,7 +227,6 @@ mod tests {
             _ => panic!("Expected a leaf node"),
         }
 
-        // Add a different leaf
         tree.add_leaf(b'B');
         assert_eq!(tree.nodes.len(), 2);
         match &tree.nodes[1] {
@@ -245,20 +242,17 @@ mod tests {
     fn test_sort_nodes() {
         let mut tree = Tree::new();
         
-        // Add leaves such that they are not sorted by frequency
         tree.add_leaf(b'A');
         tree.add_leaf(b'A');
-        tree.add_leaf(b'A'); // 'A' frequency = 3
+        tree.add_leaf(b'A');
 
-        tree.add_leaf(b'B'); // 'B' frequency = 1
+        tree.add_leaf(b'B');
 
         tree.add_leaf(b'C');
-        tree.add_leaf(b'C'); // 'C' frequency = 2
+        tree.add_leaf(b'C');
 
-        // Sort them
         tree.sort_nodes();
 
-        // After sorting: B (1), C (2), A (3)
         assert_eq!(tree.nodes.len(), 3);
         
         let get_leaf_data_and_freq = |node: &Node| -> (u8, u64) {
@@ -290,7 +284,6 @@ mod tests {
         assert!(tree.construct_tree().is_ok());
         assert_eq!(tree.root, Some(0));
 
-        // Test find_leaf on single-node tree
         assert_eq!(tree.find_leaf(b'X', None), Some(String::new()));
         assert_eq!(tree.find_leaf(b'Y', None), None);
     }
@@ -312,15 +305,10 @@ mod tests {
     fn test_construct_tree_multiple() {
         let tree = build_abc_tree();
 
-        // Find leaf paths (inverted)
-        // Path to A: left (0) from root. Inverted: "0"
         assert_eq!(tree.find_leaf(b'A', None), Some("0".to_string()));
-        // Path to C: right (1) then left (0). Inverted: "01"
         assert_eq!(tree.find_leaf(b'C', None), Some("01".to_string()));
-        // Path to B: right (1) then right (1). Inverted: "11"
         assert_eq!(tree.find_leaf(b'B', None), Some("11".to_string()));
         
-        // Find non-existent leaf
         assert_eq!(tree.find_leaf(b'D', None), None);
     }
 
@@ -328,16 +316,6 @@ mod tests {
     fn test_get_next_leaf() {
         let tree = build_abc_tree();
 
-        // A is "0", C is "01" (inverted), B is "11" (inverted)
-        // The real path to:
-        // A is '0'
-        // C is '10' (root -> right -> left)
-        // B is '11' (root -> right -> right)
-        
-        // Let's create a bitstream:
-        // 'A' (0), 'B' (11), 'C' (10), 'A' (0)
-        // Bits: 0 11 10 0
-        // Padding with 0s to make a byte: 0111 0000 = 112 (0x70)
         let buffer = vec![0x70];
         let mut reader = BitReader::new(&buffer);
 
@@ -351,7 +329,6 @@ mod tests {
     fn test_get_next_leaf_incomplete() {
         let tree = build_abc_tree();
 
-        // If the reader has no bytes, reading a bit will return None immediately.
         let buffer = Vec::new();
         let mut reader = BitReader::new(&buffer);
         
