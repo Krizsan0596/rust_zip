@@ -31,10 +31,11 @@ pub fn create_output(path: &str) -> Result<File, io::Error> {
         let file: File = File::create(path)?;
         return Ok(file);
     }
-    return Err(io::Error::new(
+
+    Err(io::Error::new(
         io::ErrorKind::AlreadyExists,
         "File already exists, and user declined overwrite.",
-    ));
+    ))
 }
 
 pub fn write_chunk(file: &mut File, chunk: &[u8]) -> Result<(), io::Error> {
@@ -122,17 +123,17 @@ impl<'a> BitReader<'a> {
         Some(bit)
     }
 
-    pub fn read_bits(&mut self, count: u8) -> Option<String> {
-        let mut out: String = String::new();
-
-        for _ in 0..count {
-            match self.read_bit() {
-                Some(false) => out.push('0'),
-                Some(true) => out.push('1'),
-                None => return None,
-            }
-        }
-
-        return Some(out);
-    }
+    // pub fn read_bits(&mut self, count: u8) -> Option<String> {
+    //     let mut out: String = String::new();
+    //
+    //     for _ in 0..count {
+    //         match self.read_bit() {
+    //             Some(false) => out.push('0'),
+    //             Some(true) => out.push('1'),
+    //             None => return None,
+    //         }
+    //     }
+    //
+    //     Some(out)
+    // }
 }

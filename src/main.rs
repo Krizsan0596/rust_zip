@@ -54,7 +54,7 @@ fn main() {
     let chunk: Vec<u8> = match get_chunk(&mut input_file) {
         Ok(chunk) => chunk,
         Err(e) => {
-            eprintln!("Error reading file '{}': {}", &opts.input_file, e);
+            eprintln!("Error reading file '{}': {}", opts.input_file, e);
             std::process::exit(1);
         }
     };
@@ -96,7 +96,7 @@ fn main() {
         writer.flush();
 
         if let Err(e) = write_chunk(&mut output_file, &buffer) {
-            eprintln!("Error writing file '{}': {}", &opts.output_file, e);
+            eprintln!("Error writing file '{}': {}", opts.output_file, e);
             std::process::exit(1);
         }
     }
@@ -114,13 +114,13 @@ fn main() {
         let mut output_file: File = match create_output(&opts.output_file) {
             Ok(file) => file,
             Err(e) => {
-                eprintln!("Error creating file '{}': {}", &opts.output_file, e);
+                eprintln!("Error creating file '{}': {}", opts.output_file, e);
                 std::process::exit(1);
             }
         };
 
         if let Err(e) = write_chunk(&mut output_file, &output) {
-            eprintln!("Error writing file '{}': {}", &opts.output_file, e);
+            eprintln!("Error writing file '{}': {}", opts.output_file, e);
             std::process::exit(1);
         }
     }

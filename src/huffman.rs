@@ -50,9 +50,9 @@ impl Tree {
         }
     }
 
-    pub fn get_node(&mut self, idx: usize) -> &mut Node {
-        return &mut self.nodes[idx];
-    }
+    // pub fn get_node(&mut self, idx: usize) -> &mut Node {
+    //     &mut self.nodes[idx]
+    // }
 
     pub fn add_leaf(&mut self, value: u8) {
         if let Some(node) = self.nodes.iter_mut().find(|node| match node {
@@ -71,8 +71,7 @@ impl Tree {
     }
 
     pub fn sort_nodes(&mut self) {
-        self.nodes
-            .sort_unstable_by(|a, b| a.frequency().cmp(&b.frequency()));
+        self.nodes.sort_unstable_by_key(|x| x.frequency());
     }
 
     pub fn construct_tree(&mut self) -> Result<(), std::io::Error> {
@@ -123,9 +122,9 @@ impl Tree {
 
     fn check_cache(&self, leaf: u8) -> Option<&String> {
         if let Some(res) = &self.cache[leaf as usize] {
-            return Some(res);
+            Some(res)
         } else {
-            return None;
+            None
         }
     }
 
@@ -139,7 +138,7 @@ impl Tree {
             return Some(path.clone());
         }
 
-        return match &self.nodes[root] {
+        match &self.nodes[root] {
             Node::Leaf(leaf) => {
                 if leaf.data == data {
                     Some(String::new())
@@ -158,7 +157,7 @@ impl Tree {
                     None
                 }
             }
-        };
+        }
     }
 
     pub fn get_next_leaf<'a>(&self, reader: &mut BitReader<'a>) -> Option<u8> {
