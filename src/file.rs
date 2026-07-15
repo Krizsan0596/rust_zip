@@ -137,3 +137,118 @@ impl<'a> BitReader<'a> {
     //     Some(out)
     // }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bit_writer_basic_push() {
+        let mut buffer = Vec::new();
+        let mut writer = BitWriter::new(&mut buffer);
+        writer.push("101");
+        assert!(writer.buffer.is_empty());
+        writer.flush();
+        assert_eq!(*writer.buffer, vec![160]);
+    }
+
+    #[test]
+    fn test_bit_writer_multiple_bytes() {
+        let mut buffer = Vec::new();
+        let mut writer = BitWriter::new(&mut buffer);
+        
+        writer.push("11111111");
+        assert_eq!(*writer.buffer, vec![255]);
+
+        writer.push("00000000");
+        assert_eq!(*writer.buffer, vec![255, 0]);
+
+        writer.push("1010");
+        assert_eq!(*writer.buffer, vec![255, 0]);
+
+        writer.flush();
+        // 10100000 == 160
+        assert_eq!(*writer.buffer, vec![255, 0, 160]);
+    }
+
+    #[test]
+    fn test_bit_writer_flush_empty() {
+        let mut buffer = Vec::new();
+        let mut writer = BitWriter::new(&mut buffer);
+        writer.flush();
+        assert!(writer.buffer.is_empty());
+
+        writer.push("1");
+        writer.flush();
+        assert_eq!(*writer.buffer, vec![128]);
+
+        writer.flush();
+        assert_eq!(*writer.buffer, vec![128]);
+    }
+
+    #[test]
+    fn test_bit_reader_basic() {
+        let buffer = vec![160]; // 10100000
+        let mut reader = BitReader::new(&buffer);
+
+        assert_eq!(reader.read_bit(), Some(true));
+        assert_eq!(reader.read_bit(), Some(false));
+        assert_eq!(reader.read_bit(), Some(true));
+        assert_eq!(reader.read_bit(), Some(false));
+        assert_eq!(reader.read_bit(), Some(false));
+        assert_eq!(reader.read_bit(), Some(false));
+        assert_eq!(reader.read_bit(), Some(false));
+        assert_eq!(reader.read_bit(), Some(false));
+        assert_eq!(reader.read_bit(), None);
+    }
+
+    #[test]
+    fn test_bit_reader_empty() {
+        let buffer = Vec::new();
+        let mut reader = BitReader::new(&buffer);
+        assert_eq!(reader.read_bit(), None);
+    }
+
+    #[test]
+    fn test_bit_reader_multiple_bytes() {
+        let buffer = vec![255, 0];
+        let mut reader = BitReader::new(&buffer);
+
+        for _ in 0..8 {
+            assert_eq!(reader.read_bit(), Some(true));
+        }
+        for _ in 0..8 {
+            assert_eq!(reader.read_bit(), Some(false));
+        }
+        assert_eq!(reader.read_bit(), None);
+    }
+
+    #[test]
+    fn test_round_trip() {
+        let mut buffer = Vec::new();
+        let bit_string = "110110001100101"; // 15 bits
+        {
+            let mut writer = BitWriter::new(&mut buffer);
+            writer.push(bit_string);
+            writer.flush();
+        }
+
+        let mut reader = BitReader::new(&buffer);
+        let mut decoded = String::new();
+        
+        for _ in 0..15 {
+            match reader.read_bit() {
+                Some(true) => decoded.push('1'),
+                Some(false) => decoded.push('0'),
+                None => break,
+            }
+        }
+        assert_eq!(decoded, bit_string);
+
+        assert_eq!(reader.read_bit(), Some(false));
+        
+        assert_eq!(reader.read_bit(), None);
+    }
+}
+
+
