@@ -91,7 +91,7 @@ impl<'a> BitReader<'a> {
         BitReader { buffer: input, byte: 0, bit_count: 0, cursor: 0 }
     }
 
-    pub fn read_bit(&mut self) -> bool {
+    pub fn read_bit(&mut self) -> Option<bool> {
         let bit: bool = match self.byte | (1 << (7 - self.bit_count)) {
             0 => false,
             _ => true,
@@ -99,23 +99,27 @@ impl<'a> BitReader<'a> {
         
         self.bit_count += 1;
         if self.bit_count == 8 {
+            if self.cursor == self.buffer.len() {
+                return None;
+            }
             self.byte = self.buffer[self.cursor];
             self.cursor += 1;
         }
 
-        return bit;
+        return Some(bit);
     }
 
-    pub fn read_bits(&mut self, count: u8) -> String {
+    pub fn read_bits(&mut self, count: u8) -> Option<String> {
         let mut out: String = String::new();
         
         for _ in 0..count {
             match self.read_bit() {
-                false => out.push('0'),
-                true => out.push('1'),
+                Some(false) => out.push('0'),
+                Some(true) => out.push('1'),
+                None => return None,
             }
         }
 
-        return out;
+        return Some(out);
     }
 }

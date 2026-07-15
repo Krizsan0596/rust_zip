@@ -2,7 +2,7 @@ mod util;
 use util::{Config, process_args, print_usage, ArgError};
 
 mod file;
-use file::{open_file, get_chunk, create_output, write_chunk, BitWriter};
+use file::{open_file, get_chunk, create_output, write_chunk, BitWriter, BitReader};
 use std::fs::File;
 
 mod huffman;
@@ -102,6 +102,26 @@ fn main() {
     }
 
     if opts.decompress {
+        let mut reader: BitReader = BitReader::new(&chunk);
+        let tree: Tree = Tree::new();
 
+        let mut output: Vec<u8> = Vec::new();
+
+        while let Some(byte) = tree.get_next_leaf(&mut reader) {
+            output.push(byte);
+        }
+
+        let mut output_file: File = match create_output(&opts.output_file) {
+            Ok(file) => file,
+            Err(e) => {
+                eprintln!("Error reading file '{}': {}", &opts.input_file, e);
+                std::process::exit(1);
+            }
+        };
+
+        if let Err(e) = write_chunk(&mut output_file, &output) {
+            eprintln!("Error writing file '{}': {}", &opts.output_file, e);
+            std::process::exit(1);
+        }
     }
 }

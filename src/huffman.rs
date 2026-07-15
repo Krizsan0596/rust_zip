@@ -1,3 +1,5 @@
+use crate::file::BitReader;
+
 struct Leaf {
     frequency: u64,
     data: u8,
@@ -156,5 +158,19 @@ impl Tree {
                 }
             }
         };
+    }
+
+    pub fn get_next_leaf<'a>(&self, reader: &mut BitReader<'a>) -> Option<u8> {
+        let mut root: &Node = &self.nodes[*self.root.as_ref().unwrap()];
+        loop {
+            root = match root {
+                Node::Leaf(leaf) => return Some(leaf.data),
+                Node::Branch(branch) => match reader.read_bit() {
+                    Some(true) => &self.nodes[branch.right as usize],
+                    Some(false) => &self.nodes[branch.left as usize],
+                    None => return None,
+                }
+            }
+        }
     }
 }
