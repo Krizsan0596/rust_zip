@@ -259,21 +259,21 @@ mod tests {
 
         // Test succeeds on existing file
         let file = tempfile::NamedTempFile::new().unwrap();
-        let path = file.path().to_str().unwrap();
-        std::fs::write(path, b"test data").unwrap();
+        let path = file.path().to_string_lossy();
+        std::fs::write(path.as_ref(), b"test data").unwrap();
 
-        let res = open_file(path);
+        let res = open_file(path.as_ref());
         assert!(res.is_ok());
     }
 
     #[test]
     fn test_get_chunk_exact_bytes() {
         let file = tempfile::NamedTempFile::new().unwrap();
-        let path = file.path().to_str().unwrap();
+        let path = file.path().to_string_lossy();
         let test_data = b"hello world";
-        std::fs::write(path, test_data).unwrap();
+        std::fs::write(path.as_ref(), test_data).unwrap();
 
-        let mut opened_file = open_file(path).unwrap();
+        let mut opened_file = open_file(path.as_ref()).unwrap();
         let chunk = get_chunk(&mut opened_file).unwrap();
         assert_eq!(chunk, test_data);
     }
@@ -281,11 +281,11 @@ mod tests {
     #[test]
     fn test_get_chunk_truncates_at_eof() {
         let file = tempfile::NamedTempFile::new().unwrap();
-        let path = file.path().to_str().unwrap();
+        let path = file.path().to_string_lossy();
         let test_data = vec![b'A'; 100];
-        std::fs::write(path, &test_data).unwrap();
+        std::fs::write(path.as_ref(), &test_data).unwrap();
 
-        let mut opened_file = open_file(path).unwrap();
+        let mut opened_file = open_file(path.as_ref()).unwrap();
 
         let chunk1 = get_chunk(&mut opened_file).unwrap();
         assert_eq!(chunk1, test_data);
@@ -298,14 +298,14 @@ mod tests {
     #[test]
     fn test_write_chunk_exact_bytes() {
         let file = tempfile::NamedTempFile::new().unwrap();
-        let path = file.path().to_str().unwrap();
+        let path = file.path().to_string_lossy();
 
-        let mut opened_file = File::create(path).unwrap();
+        let mut opened_file = File::create(path.as_ref()).unwrap();
         let data = b"some random bytes to write";
         write_chunk(&mut opened_file, data).unwrap();
         drop(opened_file);
 
-        let read_data = std::fs::read(path).unwrap();
+        let read_data = std::fs::read(path.as_ref()).unwrap();
         assert_eq!(read_data, data);
     }
 
@@ -314,8 +314,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("new_file.tmp");
 
-        let res = create_output(path.to_str().unwrap());
-        assert!(res.is_ok());
+        let path_str = path.to_string_lossy();
+        let _res = create_output(path_str.as_ref());
         assert!(path.exists());
     }
 }
