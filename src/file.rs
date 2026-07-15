@@ -143,7 +143,9 @@ impl<'a> BitReader<'a> {
 
 pub struct huffman_file<'a> {
     magic_number: [u8; 4],
+    leaf_count: u8,
     leaves: Vec<Leaf>,
+    data_len: u64,
     compressed_data: &'a Vec<u8>,
 }
 
@@ -151,16 +153,17 @@ impl<'a> huffman_file<'a> {
     pub fn new(tree: &Tree, data: &'a Vec<u8>) -> Self {
         let mut new = huffman_file {
             magic_number: MAGIC_NUMBER,
+            leaf_count: (tree.nodes.len() as u8 + 1) / 2,
             leaves: Vec::new(),
+            data_len: data.len() as u64,
             compressed_data: data,
         };
 
-        let leaf_count = (tree.nodes.len() + 1) / 2;
 
-        new.leaves.reserve(leaf_count - new.leaves.len());
+        new.leaves.reserve(new.leaf_count as usize - new.leaves.len());
 
-        for idx in 0..leaf_count {
-            if let Node::Leaf(leaf) = tree.nodes[idx] {
+        for idx in 0..new.leaf_count {
+            if let Node::Leaf(leaf) = tree.nodes[idx as usize] {
                 new.leaves.push(leaf.clone());
             }
         }
@@ -170,11 +173,47 @@ impl<'a> huffman_file<'a> {
 
     pub fn write(&self, to: &mut Vec<u8>) {
         to.extend_from_slice(&self.magic_number);
+        
+        to.push(self.leaves.len() as u8); 
+        
         for leaf in &self.leaves {
             to.extend_from_slice(&leaf.frequency.to_be_bytes());
             to.push(leaf.data);
         }
+        
         to.extend_from_slice(self.compressed_data);
+    }
+
+    pub fn read(from: Vec<u8>, buffer: &'a mut Vec<u8>) -> Self {
+        let mut cursor: usize = 4;
+        
+        let mut magic_number = [0u8; 4];
+        magic_number.copy_from_slice(&from[0..4]);
+
+        let leaf_count: u8 = from[cursor];
+        cursor += 1;
+
+        let mut leaves: Vec<Leaf> = Vec::with_capacity(leaf_count as usize);
+        for _ in 0..leaf_count {
+            let mut bytes = [0u8; 8];
+            bytes.copy_from_slice(&from[cursor..cursor+8]);
+            let byte = from[cursor+8];
+            cursor += 9;
+            leaves.push(Leaf {
+                frequency: u64::from_be_bytes(bytes),
+                data: byte,
+            });
+        }
+
+        buffer.extend_from_slice(&from[cursor..]);
+
+        Self { 
+            magic_number, 
+            leaf_count, 
+            leaves, 
+            data_len: buffer.len() as u64, 
+            compressed_data: buffer 
+        }
     }
 }
 
