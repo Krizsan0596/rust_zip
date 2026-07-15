@@ -55,17 +55,14 @@ impl Tree {
     }
 
     pub fn add_leaf(&mut self, value: u8) {
-        if let Some(node) = self.nodes.iter_mut().find(|node| {
-            match node {
-                Node::Leaf(leaf) => leaf.data == value,
-                _ => false,
-            }
+        if let Some(node) = self.nodes.iter_mut().find(|node| match node {
+            Node::Leaf(leaf) => leaf.data == value,
+            _ => false,
         }) {
             if let Node::Leaf(leaf) = node {
                 leaf.frequency += 1;
             }
-        }
-        else {
+        } else {
             self.nodes.push(Node::Leaf(Leaf {
                 data: value,
                 frequency: 1,
@@ -74,45 +71,50 @@ impl Tree {
     }
 
     pub fn sort_nodes(&mut self) {
-        self.nodes.sort_unstable_by(|a, b| a.frequency().cmp(&b.frequency()));
+        self.nodes
+            .sort_unstable_by(|a, b| a.frequency().cmp(&b.frequency()));
     }
 
     pub fn construct_tree(&mut self) -> Result<(), std::io::Error> {
         if self.nodes.is_empty() {
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, "Input file is empty."));
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Input file is empty.",
+            ));
         }
         if self.nodes.len() == 1 {
             self.root = Some(0);
             return Ok(());
         }
 
-        let leaf_count:usize = self.nodes.len();
+        let leaf_count: usize = self.nodes.len();
         self.nodes.reserve(self.nodes.len() - 1); // Huffman tree with n leaves has 2n-1 nodes.
 
-        
         let mut current_leaf: usize = 0;
         let mut current_branch: usize = leaf_count;
 
         let next_node = |leaf: &mut usize, branch: &mut usize, nodes: &[Node]| -> usize {
-                if *leaf < leaf_count
-                    && (*branch == nodes.len() || nodes[*leaf].frequency() <= nodes[*branch].frequency())
-                {
-                    let idx = *leaf;
-                    *leaf += 1;
-                    idx
-                } else {
-                    let idx = *branch;
-                    *branch += 1;
-                    idx
-                }
-            };
+            if *leaf < leaf_count
+                && (*branch == nodes.len()
+                    || nodes[*leaf].frequency() <= nodes[*branch].frequency())
+            {
+                let idx = *leaf;
+                *leaf += 1;
+                idx
+            } else {
+                let idx = *branch;
+                *branch += 1;
+                idx
+            }
+        };
 
-        for _ in 0..leaf_count-1 {
+        for _ in 0..leaf_count - 1 {
             let left = next_node(&mut current_leaf, &mut current_branch, &self.nodes);
             let right = next_node(&mut current_leaf, &mut current_branch, &self.nodes);
 
             let freq: u64 = self.nodes[left].frequency() + self.nodes[right].frequency();
-            self.nodes.push(Node::Branch(Branch::new(freq, left as u64, right as u64)));
+            self.nodes
+                .push(Node::Branch(Branch::new(freq, left as u64, right as u64)));
             self.root = Some(self.nodes.len() - 1);
         }
 
@@ -122,16 +124,18 @@ impl Tree {
     fn check_cache(&self, leaf: u8) -> Option<&String> {
         if let Some(res) = &self.cache[leaf as usize] {
             return Some(res);
-        }
-        else {
+        } else {
             return None;
         }
     }
 
-    pub fn find_leaf(&self, data: u8, root: Option<usize>) -> Option<String> { //Returns inverted
-                                                                               //path
+    pub fn find_leaf(&self, data: u8, root: Option<usize>) -> Option<String> {
+        //Returns inverted
+        //path
         let root: usize = root.unwrap_or(*self.root.as_ref().unwrap());
-        if root == *self.root.as_ref().unwrap() && let Some(path) = self.check_cache(data) {
+        if root == *self.root.as_ref().unwrap()
+            && let Some(path) = self.check_cache(data)
+        {
             return Some(path.clone());
         }
 
@@ -139,8 +143,7 @@ impl Tree {
             Node::Leaf(leaf) => {
                 if leaf.data == data {
                     Some(String::new())
-                }
-                else {
+                } else {
                     None
                 }
             }
@@ -148,12 +151,10 @@ impl Tree {
                 if let Some(mut x) = self.find_leaf(data, Some(branch.left as usize)) {
                     x.push('0');
                     Some(x)
-                }
-                else if let Some(mut x) = self.find_leaf(data, Some(branch.right as usize)) {
+                } else if let Some(mut x) = self.find_leaf(data, Some(branch.right as usize)) {
                     x.push('1');
                     Some(x)
-                }
-                else {
+                } else {
                     None
                 }
             }
@@ -169,7 +170,7 @@ impl Tree {
                     Some(true) => &self.nodes[branch.right as usize],
                     Some(false) => &self.nodes[branch.left as usize],
                     None => return None,
-                }
+                },
             }
         }
     }

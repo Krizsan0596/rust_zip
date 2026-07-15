@@ -1,4 +1,3 @@
-
 pub enum ArgError {
     Help,
     MissingOutputArg,
@@ -72,5 +71,10 @@ pub fn process_args(args: Vec<String>) -> Result<Config, ArgError> {
         }
     };
 
-    Ok(Config { input_file, output_file, compress, decompress })
+    Ok(Config {
+        input_file,
+        output_file,
+        compress,
+        decompress,
+    })
 }
