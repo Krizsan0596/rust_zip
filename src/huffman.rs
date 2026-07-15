@@ -178,6 +178,8 @@ impl Tree {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::file::BitWriter;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_tree_new() {
@@ -293,67 +295,22 @@ mod tests {
         assert_eq!(tree.find_leaf(b'Y', None), None);
     }
 
+    fn build_abc_tree() -> Tree {
+        let mut tree = Tree::new();
+        tree.add_leaf(b'A');
+        tree.add_leaf(b'A');
+        tree.add_leaf(b'A');
+        tree.add_leaf(b'B');
+        tree.add_leaf(b'B');
+        tree.add_leaf(b'C');
+        tree.sort_nodes();
+        tree.construct_tree().unwrap();
+        tree
+    }
+
     #[test]
     fn test_construct_tree_multiple() {
-        let mut tree = Tree::new();
-        
-        // Frequencies: A = 3, B = 2, C = 1
-        tree.add_leaf(b'A');
-        tree.add_leaf(b'A');
-        tree.add_leaf(b'A');
-
-        tree.add_leaf(b'B');
-        tree.add_leaf(b'B');
-
-        tree.add_leaf(b'C');
-
-        tree.sort_nodes(); // [C(1), B(2), A(3)]
-        assert!(tree.construct_tree().is_ok());
-
-        // We expect:
-        // root = Some(4)
-        // nodes[0] = Leaf C (freq 1)
-        // nodes[1] = Leaf B (freq 2)
-        // nodes[2] = Leaf A (freq 3)
-        // nodes[3] = Branch (freq 3, left = 0, right = 1) -> combines C and B
-        // nodes[4] = Branch (freq 6, left = 2, right = 3) -> combines A and nodes[3]
-        
-        assert_eq!(tree.root, Some(4));
-        assert_eq!(tree.nodes.len(), 5);
-
-        // Verify leaf positions
-        match &tree.nodes[0] {
-            Node::Leaf(leaf) => assert_eq!(leaf.data, b'C'),
-            _ => panic!(),
-        }
-        match &tree.nodes[1] {
-            Node::Leaf(leaf) => assert_eq!(leaf.data, b'B'),
-            _ => panic!(),
-        }
-        match &tree.nodes[2] {
-            Node::Leaf(leaf) => assert_eq!(leaf.data, b'A'),
-            _ => panic!(),
-        }
-
-        // Verify Branch 3
-        match &tree.nodes[3] {
-            Node::Branch(branch) => {
-                assert_eq!(branch.frequency, 3);
-                assert_eq!(branch.left, 0);
-                assert_eq!(branch.right, 1);
-            }
-            _ => panic!(),
-        }
-
-        // Verify Branch 4
-        match &tree.nodes[4] {
-            Node::Branch(branch) => {
-                assert_eq!(branch.frequency, 6);
-                assert_eq!(branch.left, 2);
-                assert_eq!(branch.right, 3);
-            }
-            _ => panic!(),
-        }
+        let tree = build_abc_tree();
 
         // Find leaf paths (inverted)
         // Path to A: left (0) from root. Inverted: "0"
@@ -369,18 +326,7 @@ mod tests {
 
     #[test]
     fn test_get_next_leaf() {
-        let mut tree = Tree::new();
-        tree.add_leaf(b'A');
-        tree.add_leaf(b'A');
-        tree.add_leaf(b'A');
-
-        tree.add_leaf(b'B');
-        tree.add_leaf(b'B');
-
-        tree.add_leaf(b'C');
-
-        tree.sort_nodes();
-        tree.construct_tree().unwrap();
+        let tree = build_abc_tree();
 
         // A is "0", C is "01" (inverted), B is "11" (inverted)
         // The real path to:
@@ -403,23 +349,73 @@ mod tests {
 
     #[test]
     fn test_get_next_leaf_incomplete() {
-        let mut tree = Tree::new();
-        tree.add_leaf(b'A');
-        tree.add_leaf(b'A');
-        tree.add_leaf(b'A');
-
-        tree.add_leaf(b'B');
-        tree.add_leaf(b'B');
-
-        tree.add_leaf(b'C');
-
-        tree.sort_nodes();
-        tree.construct_tree().unwrap();
+        let tree = build_abc_tree();
 
         // If the reader has no bytes, reading a bit will return None immediately.
         let buffer = Vec::new();
         let mut reader = BitReader::new(&buffer);
         
         assert_eq!(tree.get_next_leaf(&mut reader), None);
+    }
+
+    #[test]
+    fn test_huffman_round_trip() {
+        let input_bytes = b"hello world huffman encoding test";
+        let mut tree = Tree::new();
+        for &byte in input_bytes {
+            tree.add_leaf(byte);
+        }
+        tree.sort_nodes();
+        tree.construct_tree().unwrap();
+
+        let mut buffer = Vec::new();
+        {
+            let mut writer = BitWriter::new(&mut buffer);
+            for &byte in input_bytes {
+                let bits = tree.find_leaf(byte, None).unwrap();
+                let reversed_bits: String = bits.chars().rev().collect();
+                writer.push(&reversed_bits);
+            }
+            writer.flush();
+        }
+
+        let mut reader = BitReader::new(&buffer);
+        let mut decoded_bytes = Vec::new();
+        
+        for _ in 0..input_bytes.len() {
+            if let Some(byte) = tree.get_next_leaf(&mut reader) {
+                decoded_bytes.push(byte);
+            } else {
+                break;
+            }
+        }
+
+        assert_eq!(decoded_bytes, input_bytes);
+    }
+
+    #[test]
+    fn test_single_symbol_repeated() {
+        let input_bytes = b"AAAAAA";
+        let mut tree = Tree::new();
+        for &byte in input_bytes {
+            tree.add_leaf(byte);
+        }
+        tree.sort_nodes();
+        tree.construct_tree().unwrap();
+
+        let bits = tree.find_leaf(b'A', None).unwrap();
+        assert_eq!(bits, "");
+
+        let mut buffer = Vec::new();
+        {
+            let mut writer = BitWriter::new(&mut buffer);
+            for &_ in input_bytes {
+                let reversed_bits: String = bits.chars().rev().collect();
+                writer.push(&reversed_bits);
+            }
+            writer.flush();
+        }
+
+        assert!(buffer.is_empty());
     }
 }

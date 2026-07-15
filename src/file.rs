@@ -141,6 +141,7 @@ impl<'a> BitReader<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_bit_writer_basic_push() {
@@ -248,6 +249,74 @@ mod tests {
         assert_eq!(reader.read_bit(), Some(false));
         
         assert_eq!(reader.read_bit(), None);
+    }
+
+    #[test]
+    fn test_open_file_succeeds_and_fails() {
+        // Test fails on non-existent file
+        let res = open_file("non_existent_file_path_123.tmp");
+        assert!(res.is_err());
+
+        // Test succeeds on existing file
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let path = file.path().to_str().unwrap();
+        std::fs::write(path, b"test data").unwrap();
+
+        let res = open_file(path);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_get_chunk_exact_bytes() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let path = file.path().to_str().unwrap();
+        let test_data = b"hello world";
+        std::fs::write(path, test_data).unwrap();
+
+        let mut opened_file = open_file(path).unwrap();
+        let chunk = get_chunk(&mut opened_file).unwrap();
+        assert_eq!(chunk, test_data);
+    }
+
+    #[test]
+    fn test_get_chunk_truncates_at_eof() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let path = file.path().to_str().unwrap();
+        let test_data = vec![b'A'; 100];
+        std::fs::write(path, &test_data).unwrap();
+
+        let mut opened_file = open_file(path).unwrap();
+        
+        let chunk1 = get_chunk(&mut opened_file).unwrap();
+        assert_eq!(chunk1, test_data);
+        assert_eq!(chunk1.len(), 100);
+
+        let chunk2 = get_chunk(&mut opened_file).unwrap();
+        assert!(chunk2.is_empty());
+    }
+
+    #[test]
+    fn test_write_chunk_exact_bytes() {
+        let file = tempfile::NamedTempFile::new().unwrap();
+        let path = file.path().to_str().unwrap();
+
+        let mut opened_file = File::create(path).unwrap();
+        let data = b"some random bytes to write";
+        write_chunk(&mut opened_file, data).unwrap();
+        drop(opened_file);
+
+        let read_data = std::fs::read(path).unwrap();
+        assert_eq!(read_data, data);
+    }
+
+    #[test]
+    fn test_create_output_new_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("new_file.tmp");
+
+        let res = create_output(path.to_str().unwrap());
+        assert!(res.is_ok());
+        assert!(path.exists());
     }
 }
 
