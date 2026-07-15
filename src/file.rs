@@ -78,3 +78,44 @@ impl<'a> BitWriter<'a> {
         self.bit_count = 0;
     }
 }
+
+pub struct BitReader<'a> {
+    buffer: &'a Vec<u8>,
+    byte: u8,
+    bit_count: u8,
+    cursor: usize,
+}
+
+impl<'a> BitReader<'a> {
+    pub fn new(input: &'a Vec<u8>) -> Self {
+        BitReader { buffer: input, byte: 0, bit_count: 0, cursor: 0 }
+    }
+
+    pub fn read_bit(&mut self) -> bool {
+        let bit: bool = match self.byte | (1 << (7 - self.bit_count)) {
+            0 => false,
+            _ => true,
+        };
+        
+        self.bit_count += 1;
+        if self.bit_count == 8 {
+            self.byte = self.buffer[self.cursor];
+            self.cursor += 1;
+        }
+
+        return bit;
+    }
+
+    pub fn read_bits(&mut self, count: u8) -> String {
+        let mut out: String = String::new();
+        
+        for _ in 0..count {
+            match self.read_bit() {
+                false => out.push('0'),
+                true => out.push('1'),
+            }
+        }
+
+        return out;
+    }
+}
