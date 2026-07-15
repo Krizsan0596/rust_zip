@@ -2,7 +2,7 @@ mod util;
 use util::{ArgError, Config, print_usage, process_args};
 
 mod file;
-use file::{BitReader, BitWriter, create_output, get_chunk, open_file, write_chunk};
+use file::{BitReader, BitWriter, create_output, get_chunk, open_file, write_chunk, huffman_file};
 use std::fs::File;
 
 mod huffman;
@@ -95,7 +95,12 @@ fn main() {
         }
         writer.flush();
 
-        if let Err(e) = write_chunk(&mut output_file, &buffer) {
+        let h_file = huffman_file::new(&tree, &buffer);
+
+        let mut output: Vec<u8> = Vec::new();
+        h_file.write(&mut output);
+
+        if let Err(e) = write_chunk(&mut output_file, &output) {
             eprintln!("Error writing file '{}': {}", opts.output_file, e);
             std::process::exit(1);
         }

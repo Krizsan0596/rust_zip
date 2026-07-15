@@ -141,7 +141,7 @@ impl<'a> BitReader<'a> {
     // }
 }
 
-struct huffman_file<'a> {
+pub struct huffman_file<'a> {
     magic_number: [u8; 4],
     leaves: Vec<Leaf>,
     compressed_data: &'a Vec<u8>,
