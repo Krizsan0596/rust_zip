@@ -96,8 +96,7 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Generate HTML coverage report
-        run: cargo llvm-cov --all-features --workspace --html --output-dir ./coverage-report
-
+        run: cargo llvm-cov --all-features --html --output-dir ./coverage-report
       - name: Upload HTML report as artifact
         uses: actions/upload-artifact@v4
         with:
