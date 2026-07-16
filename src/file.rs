@@ -5,7 +5,7 @@ use std::path::Path;
 use crate::huffman::{Leaf, Node, Tree};
 
 const CHUNK_SIZE: usize = 1024 * 1024 * 8; // 8 MB
-const MAGIC_NUMBER: [u8; 4] = [b'Z', b'I', b'P', b'1'];
+const MAGIC_NUMBER: [u8; 4] = *b"ZIP1";
 
 pub fn open_file(path: &str) -> Result<File, io::Error> {
     let file = File::open(path)?;
@@ -154,34 +154,34 @@ impl<'a> HuffmanFile<'a> {
     pub fn new(tree: &Tree, data: &'a Vec<u8>) -> Self {
         let mut new = HuffmanFile {
             magic_number: MAGIC_NUMBER,
-            leaf_count: (tree.nodes.len() as u8 + 1) / 2,
+            leaf_count: tree.nodes.len().div_ceil(2) as u8,
             leaves: Vec::new(),
             data_len: data.len() as u64,
             compressed_data: data,
         };
 
-
-        new.leaves.reserve(new.leaf_count as usize - new.leaves.len());
+        new.leaves
+            .reserve(new.leaf_count as usize - new.leaves.len());
 
         for idx in 0..new.leaf_count {
             if let Node::Leaf(leaf) = tree.nodes[idx as usize] {
-                new.leaves.push(leaf.clone());
+                new.leaves.push(leaf);
             }
         }
 
-        return new;
+        new
     }
 
     pub fn write(&self, to: &mut Vec<u8>) {
         to.extend_from_slice(&self.magic_number);
-        
-        to.push(self.leaves.len() as u8); 
-        
+
+        to.push(self.leaves.len() as u8);
+
         for leaf in &self.leaves {
             to.extend_from_slice(&leaf.frequency.to_be_bytes());
             to.push(leaf.data);
         }
-        
+
         to.extend_from_slice(self.compressed_data);
     }
 
@@ -204,7 +204,7 @@ impl<'a> HuffmanFile<'a> {
         }
 
         let mut cursor: usize = 4;
-        
+
         if cursor >= from.len() {
             return Err(io::Error::new(
                 io::ErrorKind::UnexpectedEof,
@@ -223,8 +223,8 @@ impl<'a> HuffmanFile<'a> {
                 ));
             }
             let mut bytes = [0u8; 8];
-            bytes.copy_from_slice(&from[cursor..cursor+8]);
-            let byte = from[cursor+8];
+            bytes.copy_from_slice(&from[cursor..cursor + 8]);
+            let byte = from[cursor + 8];
             cursor += 9;
             leaves.push(Leaf {
                 frequency: u64::from_be_bytes(bytes),
@@ -234,12 +234,12 @@ impl<'a> HuffmanFile<'a> {
 
         buffer.extend_from_slice(&from[cursor..]);
 
-        Ok(Self { 
-            magic_number, 
-            leaf_count, 
-            leaves, 
-            data_len: buffer.len() as u64, 
-            compressed_data: buffer 
+        Ok(Self {
+            magic_number,
+            leaf_count,
+            leaves,
+            data_len: buffer.len() as u64,
+            compressed_data: buffer,
         })
     }
 }

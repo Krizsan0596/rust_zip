@@ -2,7 +2,7 @@ mod util;
 use util::{ArgError, Config, print_usage, process_args};
 
 mod file;
-use file::{BitReader, BitWriter, create_output, get_chunk, open_file, write_chunk, HuffmanFile};
+use file::{BitReader, BitWriter, HuffmanFile, create_output, get_chunk, open_file, write_chunk};
 use std::fs::File;
 
 mod huffman;

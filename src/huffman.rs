@@ -422,7 +422,7 @@ mod tests {
             data: b'A',
             frequency: 10,
         };
-        let cloned_leaf = leaf.clone();
+        let cloned_leaf = leaf;
         assert_eq!(cloned_leaf, leaf);
 
         let copied_leaf = leaf;
@@ -435,14 +435,14 @@ mod tests {
             data: b'A',
             frequency: 10,
         });
-        let cloned_node = leaf.clone();
+        let cloned_node = leaf;
         assert_eq!(cloned_node, leaf);
 
         let copied_node = leaf;
         assert_eq!(copied_node, leaf);
 
         let branch = Node::Branch(Branch::new(100, 1, 2));
-        let cloned_branch = branch.clone();
+        let cloned_branch = branch;
         assert_eq!(cloned_branch, branch);
 
         let copied_branch = branch;
