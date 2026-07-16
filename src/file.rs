@@ -142,17 +142,17 @@ impl<'a> BitReader<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct huffman_file<'a> {
+pub struct HuffmanFile<'a> {
     magic_number: [u8; 4],
     leaf_count: u8,
-    leaves: Vec<Leaf>,
+    pub leaves: Vec<Leaf>,
     data_len: u64,
     compressed_data: &'a Vec<u8>,
 }
 
-impl<'a> huffman_file<'a> {
+impl<'a> HuffmanFile<'a> {
     pub fn new(tree: &Tree, data: &'a Vec<u8>) -> Self {
-        let mut new = huffman_file {
+        let mut new = HuffmanFile {
             magic_number: MAGIC_NUMBER,
             leaf_count: (tree.nodes.len() as u8 + 1) / 2,
             leaves: Vec::new(),
@@ -359,11 +359,9 @@ mod tests {
 
     #[test]
     fn test_open_file_succeeds_and_fails() {
-        // Test fails on non-existent file
         let res = open_file("non_existent_file_path_123.tmp");
         assert!(res.is_err());
 
-        // Test succeeds on existing file
         let file = tempfile::NamedTempFile::new().unwrap();
         let path = file.path().to_string_lossy();
         std::fs::write(path.as_ref(), b"test data").unwrap();
@@ -427,7 +425,6 @@ mod tests {
 
     #[test]
     fn test_huffman_file_validation() {
-        // 1. Success case with valid round-trip
         let mut tree = Tree::new();
         tree.add_leaf(b'a');
         tree.add_leaf(b'b');
@@ -435,32 +432,30 @@ mod tests {
         tree.construct_tree().unwrap();
 
         let compressed_data = vec![1, 2, 3];
-        let h_file = huffman_file::new(&tree, &compressed_data);
+        let h_file = HuffmanFile::new(&tree, &compressed_data);
 
         let mut written_bytes = Vec::new();
         h_file.write(&mut written_bytes);
 
         let mut read_buffer = Vec::new();
-        let read_res = huffman_file::read(written_bytes.clone(), &mut read_buffer);
+        let read_res = HuffmanFile::read(written_bytes.clone(), &mut read_buffer);
         assert!(read_res.is_ok());
         let read_file = read_res.unwrap();
         assert_eq!(read_file, h_file);
         assert_eq!(read_buffer, compressed_data);
 
-        // 2. Failure: input too short
         let short_bytes = vec![b'Z', b'I', b'P'];
         let mut buf = Vec::new();
-        let err_res = huffman_file::read(short_bytes, &mut buf);
+        let err_res = HuffmanFile::read(short_bytes, &mut buf);
         assert!(err_res.is_err());
         let err = err_res.unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::InvalidData);
         assert!(err.to_string().contains("too short"));
 
-        // 3. Failure: wrong magic number
         let mut wrong_magic = written_bytes.clone();
         wrong_magic[0..4].copy_from_slice(b"ZIP2");
         let mut buf = Vec::new();
-        let err_res = huffman_file::read(wrong_magic, &mut buf);
+        let err_res = HuffmanFile::read(wrong_magic, &mut buf);
         assert!(err_res.is_err());
         let err = err_res.unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::InvalidData);

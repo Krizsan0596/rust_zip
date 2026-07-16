@@ -2,7 +2,7 @@ mod util;
 use util::{ArgError, Config, print_usage, process_args};
 
 mod file;
-use file::{BitReader, BitWriter, create_output, get_chunk, open_file, write_chunk, huffman_file};
+use file::{BitReader, BitWriter, create_output, get_chunk, open_file, write_chunk, HuffmanFile};
 use std::fs::File;
 
 mod huffman;
@@ -95,7 +95,7 @@ fn main() {
         }
         writer.flush();
 
-        let h_file = huffman_file::new(&tree, &buffer);
+        let h_file = HuffmanFile::new(&tree, &buffer);
 
         let mut output: Vec<u8> = Vec::new();
         h_file.write(&mut output);
@@ -107,8 +107,18 @@ fn main() {
     }
 
     if opts.decompress {
-        let mut reader: BitReader = BitReader::new(&chunk);
-        let tree: Tree = Tree::new();
+        let mut buffer: Vec<u8> = Vec::new();
+        let leaves = match HuffmanFile::read(chunk, &mut buffer) {
+            Ok(file) => file.leaves,
+            Err(e) => {
+                eprintln!("Error reading compressed file: {}", e);
+                std::process::exit(1);
+            }
+        };
+
+        let mut reader = BitReader::new(&buffer);
+
+        let tree = Tree::import(leaves);
 
         let mut output: Vec<u8> = Vec::new();
 

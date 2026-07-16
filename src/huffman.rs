@@ -7,7 +7,7 @@ pub struct Leaf {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Branch {
+pub struct Branch {
     frequency: u64,
     left: u64,
     right: u64,
@@ -174,6 +174,15 @@ impl Tree {
                     None => return None,
                 },
             }
+        }
+    }
+
+    pub fn import(from: Vec<Leaf>) -> Self {
+        let nodes: Vec<Node> = from.into_iter().map(Node::Leaf).collect();
+        Tree {
+            root: None,
+            nodes,
+            cache: vec![None; 256].into_boxed_slice().try_into().unwrap(),
         }
     }
 }
