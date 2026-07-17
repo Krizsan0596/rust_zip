@@ -9,8 +9,8 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    name: Build and Release
+  build:
+    name: Build Binaries
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -66,8 +66,26 @@ jobs:
             echo "ASSET=${{ env.BIN_NAME }}-${{ matrix.os_name }}.tar.gz" >> $GITHUB_ENV
           fi
 
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.os_name }}
+          path: ${{ env.ASSET }}
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          pattern: binary-*
+          merge-multiple: true
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.ASSET }}
+          files: release-artifacts/*
           generate_release_notes: true
