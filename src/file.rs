@@ -169,7 +169,7 @@ impl<'a> HuffmanFile<'a> {
         };
 
         new.leaves
-            .reserve((new.leaf_count + 1) as usize - new.leaves.len());
+            .reserve(new.leaf_count as usize + 1 - new.leaves.len());
 
         for idx in 0..=new.leaf_count {
             if let Node::Leaf(leaf) = tree.nodes[idx as usize] {
@@ -224,8 +224,8 @@ impl<'a> HuffmanFile<'a> {
         let leaf_count: u8 = from[cursor];
         cursor += 1;
 
-        let mut leaves: Vec<Leaf> = Vec::with_capacity((leaf_count + 1) as usize);
-        for _ in 0..leaf_count + 1 {
+        let mut leaves: Vec<Leaf> = Vec::with_capacity(leaf_count as usize + 1);
+        for _ in 0..leaf_count as usize + 1 {
             if cursor + 9 > from.len() {
                 return Err(io::Error::new(
                     io::ErrorKind::UnexpectedEof,
