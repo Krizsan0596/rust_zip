@@ -71,7 +71,7 @@ impl Tree {
     pub fn sort_nodes(&mut self) {
         self.nodes.retain(|x| x.is_some());
         self.nodes
-            .sort_unstable_by_key(|x| x.as_ref().map(|y| y.frequency()));
+            .sort_unstable_by_key(|x| x.as_ref().unwrap().frequency());
     }
 
     pub fn construct_tree(&mut self) -> Result<(), std::io::Error> {

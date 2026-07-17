@@ -12,11 +12,12 @@ pub fn open_file(path: &str) -> Result<File, io::Error> {
     Ok(file)
 }
 
-pub fn get_chunk(file: &mut File) -> Result<Vec<u8>, io::Error> {
-    let mut chunk = vec![0u8; CHUNK_SIZE];
-    let n = file.read(&mut chunk)?;
+pub fn get_chunk(file: &mut File, chunk: &mut Vec<u8>) -> Result<usize, io::Error> {
+    chunk.clear();
+    chunk.resize(CHUNK_SIZE, 0);
+    let n = file.read(chunk)?;
     chunk.truncate(n);
-    Ok(chunk)
+    Ok(n)
 }
 
 pub fn create_output(path: &str) -> Result<File, io::Error> {
@@ -195,7 +196,7 @@ impl<'a> HuffmanFile<'a> {
         to.extend_from_slice(self.compressed_data);
     }
 
-    pub fn read(from: Vec<u8>, buffer: &'a mut Vec<u8>) -> Result<Self, io::Error> {
+    pub fn read(from: &[u8], buffer: &'a mut Vec<u8>) -> Result<Self, io::Error> {
         if from.len() < 4 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -393,7 +394,8 @@ mod tests {
         std::fs::write(path.as_ref(), test_data).unwrap();
 
         let mut opened_file = open_file(path.as_ref()).unwrap();
-        let chunk = get_chunk(&mut opened_file).unwrap();
+        let mut chunk = Vec::new();
+        get_chunk(&mut opened_file, &mut chunk).unwrap();
         assert_eq!(chunk, test_data);
     }
 
@@ -406,12 +408,13 @@ mod tests {
 
         let mut opened_file = open_file(path.as_ref()).unwrap();
 
-        let chunk1 = get_chunk(&mut opened_file).unwrap();
-        assert_eq!(chunk1, test_data);
-        assert_eq!(chunk1.len(), 100);
+        let mut chunk = Vec::new();
+        get_chunk(&mut opened_file, &mut chunk).unwrap();
+        assert_eq!(chunk, test_data);
+        assert_eq!(chunk.len(), 100);
 
-        let chunk2 = get_chunk(&mut opened_file).unwrap();
-        assert!(chunk2.is_empty());
+        get_chunk(&mut opened_file, &mut chunk).unwrap();
+        assert!(chunk.is_empty());
     }
 
     #[test]
@@ -453,7 +456,7 @@ mod tests {
         h_file.write(&mut written_bytes);
 
         let mut read_buffer = Vec::new();
-        let read_res = HuffmanFile::read(written_bytes.clone(), &mut read_buffer);
+        let read_res = HuffmanFile::read(&written_bytes, &mut read_buffer);
         assert!(read_res.is_ok());
         let read_file = read_res.unwrap();
         assert_eq!(read_file, h_file);
@@ -461,7 +464,7 @@ mod tests {
 
         let short_bytes = vec![b'Z', b'I', b'P'];
         let mut buf = Vec::new();
-        let err_res = HuffmanFile::read(short_bytes, &mut buf);
+        let err_res = HuffmanFile::read(&short_bytes, &mut buf);
         assert!(err_res.is_err());
         let err = err_res.unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::InvalidData);
@@ -470,7 +473,7 @@ mod tests {
         let mut wrong_magic = written_bytes.clone();
         wrong_magic[0..4].copy_from_slice(b"ZIP2");
         let mut buf = Vec::new();
-        let err_res = HuffmanFile::read(wrong_magic, &mut buf);
+        let err_res = HuffmanFile::read(&wrong_magic, &mut buf);
         assert!(err_res.is_err());
         let err = err_res.unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::InvalidData);

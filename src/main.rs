@@ -51,13 +51,11 @@ fn main() {
         }
     };
 
-    let chunk: Vec<u8> = match get_chunk(&mut input_file) {
-        Ok(chunk) => chunk,
-        Err(e) => {
-            eprintln!("Error reading file '{}': {}", opts.input_file, e);
-            std::process::exit(1);
-        }
-    };
+    let mut chunk = Vec::new();
+    if let Err(e) = get_chunk(&mut input_file, &mut chunk) {
+        eprintln!("Error reading file '{}': {}", opts.input_file, e);
+        std::process::exit(1);
+    }
 
     if opts.compress {
         let mut output_file: File = match create_output(&opts.output_file) {
@@ -115,7 +113,7 @@ fn main() {
         let mut buffer: Vec<u8> = Vec::new();
 
         let (leaves, data_len) = {
-            let h_file = match HuffmanFile::read(chunk, &mut buffer) {
+            let h_file = match HuffmanFile::read(&chunk, &mut buffer) {
                 Ok(file) => file,
                 Err(e) => {
                     eprintln!("Error reading compressed file: {}", e);
