@@ -167,6 +167,12 @@ impl Tree {
         }
     }
 
+    pub fn cache_leaf(&mut self, data: &u8, path: &str) {
+        if self.cache[*data as usize].is_none() {
+            self.cache[*data as usize] = Some(path.chars().rev().collect());
+        }
+    }
+
     pub fn get_next_leaf<'a>(&self, reader: &mut BitReader<'a>) -> Option<u8> {
         let mut root: &Node = self.nodes[*self.root.as_ref().unwrap()].as_ref().unwrap();
         loop {
@@ -457,5 +463,19 @@ mod tests {
 
         let copied_branch = branch;
         assert_eq!(copied_branch, branch);
+    }
+
+    #[test]
+    fn test_cache_leaf() {
+        let mut tree = build_abc_tree();
+
+        // Before caching, find_leaf returns inverted path for 'C' which is "01"
+        assert_eq!(tree.find_leaf(b'C', None), Some("01".to_string()));
+
+        // Cache the correct path "10" for 'C'. It should be stored inverted as "01".
+        tree.cache_leaf(&b'C', "10");
+
+        // find_leaf should now hit the cache and return the stored inverted path "01"
+        assert_eq!(tree.find_leaf(b'C', None), Some("01".to_string()));
     }
 }
