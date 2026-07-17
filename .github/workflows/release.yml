@@ -1,0 +1,73 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            os_name: linux-x86_64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            os_name: macos-x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            os_name: windows-x86_64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Extract crate information
+        shell: bash
+        run: |
+          BIN_NAME=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | .targets[] | select(.kind[] | contains("bin")) | .name' | head -n 1)
+          echo "BIN_NAME=$BIN_NAME" >> $GITHUB_ENV
+
+      - name: Build release binary
+        env:
+          CARGO_PROFILE_RELEASE_STRIP: true
+          CARGO_PROFILE_RELEASE_LTO: true
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package binary
+        shell: bash
+        run: |
+          BIN_PATH="target/${{ matrix.target }}/release/${{ env.BIN_NAME }}"
+          
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            BIN_PATH="${BIN_PATH}.exe"
+          fi
+          
+          mkdir staging
+          mv "$BIN_PATH" staging/
+
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            7z a "${{ env.BIN_NAME }}-${{ matrix.os_name }}.zip" ./staging/*
+            echo "ASSET=${{ env.BIN_NAME }}-${{ matrix.os_name }}.zip" >> $GITHUB_ENV
+          else
+            tar -czf "${{ env.BIN_NAME }}-${{ matrix.os_name }}.tar.gz" -C staging .
+            echo "ASSET=${{ env.BIN_NAME }}-${{ matrix.os_name }}.tar.gz" >> $GITHUB_ENV
+          fi
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ASSET }}
+          generate_release_notes: true
