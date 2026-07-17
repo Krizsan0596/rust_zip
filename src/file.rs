@@ -2,7 +2,10 @@ use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::Path;
 
+use crate::huffman::{Leaf, Node, Tree};
+
 const CHUNK_SIZE: usize = 1024 * 1024 * 8; // 8 MB
+const MAGIC_NUMBER: [u8; 4] = *b"ZIP1";
 
 pub fn open_file(path: &str) -> Result<File, io::Error> {
     let file = File::open(path)?;
@@ -44,9 +47,9 @@ pub fn write_chunk(file: &mut File, chunk: &[u8]) -> Result<(), io::Error> {
 }
 
 pub struct BitWriter<'a> {
-    buffer: &'a mut Vec<u8>,
+    pub buffer: &'a mut Vec<u8>,
     byte: u8,
-    bit_count: u8,
+    pub bit_count: u8,
 }
 
 impl<'a> BitWriter<'a> {
@@ -92,22 +95,29 @@ pub struct BitReader<'a> {
     byte: u8,
     bit_count: u8,
     cursor: usize,
+    bits_read: u64,
+    total_bits: u64,
 }
 
 impl<'a> BitReader<'a> {
-    pub fn new(input: &'a Vec<u8>) -> Self {
+    pub fn new(input: &'a Vec<u8>, total_bits: u64) -> Self {
         BitReader {
             buffer: input,
             byte: 0,
             bit_count: 0,
             cursor: 0,
+            bits_read: 0,
+            total_bits,
         }
     }
 
     pub fn read_bit(&mut self) -> Option<bool> {
+        if self.bits_read == self.total_bits {
+            return None;
+        }
         if self.bit_count == 0 {
             if self.cursor == self.buffer.len() {
-                return None;
+                return None; // should panic?
             }
             self.byte = self.buffer[self.cursor];
             self.cursor += 1;
@@ -116,6 +126,7 @@ impl<'a> BitReader<'a> {
         let bit = (self.byte & (1 << (7 - self.bit_count))) != 0;
 
         self.bit_count += 1;
+        self.bits_read += 1;
         if self.bit_count == 8 {
             self.bit_count = 0;
         }
@@ -136,6 +147,116 @@ impl<'a> BitReader<'a> {
     //
     //     Some(out)
     // }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct HuffmanFile<'a> {
+    magic_number: [u8; 4],
+    leaf_count: u8,
+    pub leaves: Vec<Leaf>,
+    pub data_len: u64, // in bits
+    compressed_data: &'a Vec<u8>,
+}
+
+impl<'a> HuffmanFile<'a> {
+    pub fn new(tree: &Tree, data: &'a Vec<u8>, data_len: u64) -> Self {
+        let mut new = HuffmanFile {
+            magic_number: MAGIC_NUMBER,
+            leaf_count: (tree.nodes.len().div_ceil(2) - 1) as u8,
+            leaves: Vec::new(),
+            data_len,
+            compressed_data: data,
+        };
+
+        new.leaves
+            .reserve((new.leaf_count + 1) as usize - new.leaves.len());
+
+        for idx in 0..=new.leaf_count {
+            if let Node::Leaf(leaf) = tree.nodes[idx as usize] {
+                new.leaves.push(leaf);
+            }
+        }
+
+        new
+    }
+
+    pub fn write(&self, to: &mut Vec<u8>) {
+        to.extend_from_slice(&self.magic_number);
+
+        to.push(self.leaf_count);
+
+        for leaf in &self.leaves {
+            to.extend_from_slice(&leaf.frequency.to_be_bytes());
+            to.push(leaf.data);
+        }
+
+        to.extend_from_slice(&self.data_len.to_be_bytes());
+
+        to.extend_from_slice(self.compressed_data);
+    }
+
+    pub fn read(from: Vec<u8>, buffer: &'a mut Vec<u8>) -> Result<Self, io::Error> {
+        if from.len() < 4 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "File too short to contain magic number",
+            ));
+        }
+
+        let mut magic_number = [0u8; 4];
+        magic_number.copy_from_slice(&from[0..4]);
+
+        if magic_number != MAGIC_NUMBER {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Invalid magic number",
+            ));
+        }
+
+        let mut cursor: usize = 4;
+
+        if cursor >= from.len() {
+            return Err(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "Unexpected EOF reading leaf count",
+            ));
+        }
+        let leaf_count: u8 = from[cursor];
+        cursor += 1;
+
+        let mut leaves: Vec<Leaf> = Vec::with_capacity((leaf_count + 1) as usize);
+        for _ in 0..leaf_count + 1 {
+            if cursor + 9 > from.len() {
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "Unexpected EOF reading leaf data",
+                ));
+            }
+            let mut bytes = [0u8; 8];
+            bytes.copy_from_slice(&from[cursor..cursor + 8]);
+            let byte = from[cursor + 8];
+            cursor += 9;
+            leaves.push(Leaf {
+                frequency: u64::from_be_bytes(bytes),
+                data: byte,
+            });
+        }
+
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(&from[cursor..cursor + 8]);
+        let data_len = u64::from_be_bytes(bytes);
+        cursor += 8;
+
+        buffer.extend_from_slice(&from[cursor..]);
+
+        Ok(Self {
+            magic_number,
+            leaf_count,
+            leaves,
+            data_len,
+            compressed_data: buffer,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -190,7 +311,7 @@ mod tests {
     #[test]
     fn test_bit_reader_basic() {
         let buffer = vec![160]; // 10100000
-        let mut reader = BitReader::new(&buffer);
+        let mut reader = BitReader::new(&buffer, 8);
 
         assert_eq!(reader.read_bit(), Some(true));
         assert_eq!(reader.read_bit(), Some(false));
@@ -206,14 +327,14 @@ mod tests {
     #[test]
     fn test_bit_reader_empty() {
         let buffer = Vec::new();
-        let mut reader = BitReader::new(&buffer);
+        let mut reader = BitReader::new(&buffer, 0);
         assert_eq!(reader.read_bit(), None);
     }
 
     #[test]
     fn test_bit_reader_multiple_bytes() {
         let buffer = vec![255, 0];
-        let mut reader = BitReader::new(&buffer);
+        let mut reader = BitReader::new(&buffer, 16);
 
         for _ in 0..8 {
             assert_eq!(reader.read_bit(), Some(true));
@@ -234,7 +355,7 @@ mod tests {
             writer.flush();
         }
 
-        let mut reader = BitReader::new(&buffer);
+        let mut reader = BitReader::new(&buffer, 16);
         let mut decoded = String::new();
 
         for _ in 0..15 {
@@ -253,11 +374,9 @@ mod tests {
 
     #[test]
     fn test_open_file_succeeds_and_fails() {
-        // Test fails on non-existent file
         let res = open_file("non_existent_file_path_123.tmp");
         assert!(res.is_err());
 
-        // Test succeeds on existing file
         let file = tempfile::NamedTempFile::new().unwrap();
         let path = file.path().to_string_lossy();
         std::fs::write(path.as_ref(), b"test data").unwrap();
@@ -317,5 +436,44 @@ mod tests {
         let path_str = path.to_string_lossy();
         let _res = create_output(path_str.as_ref());
         assert!(path.exists());
+    }
+
+    #[test]
+    fn test_huffman_file_validation() {
+        let mut tree = Tree::new();
+        tree.add_leaf(b'a');
+        tree.add_leaf(b'b');
+        tree.sort_nodes();
+        tree.construct_tree().unwrap();
+
+        let compressed_data = vec![1, 2, 3];
+        let h_file = HuffmanFile::new(&tree, &compressed_data, 24);
+
+        let mut written_bytes = Vec::new();
+        h_file.write(&mut written_bytes);
+
+        let mut read_buffer = Vec::new();
+        let read_res = HuffmanFile::read(written_bytes.clone(), &mut read_buffer);
+        assert!(read_res.is_ok());
+        let read_file = read_res.unwrap();
+        assert_eq!(read_file, h_file);
+        assert_eq!(read_buffer, compressed_data);
+
+        let short_bytes = vec![b'Z', b'I', b'P'];
+        let mut buf = Vec::new();
+        let err_res = HuffmanFile::read(short_bytes, &mut buf);
+        assert!(err_res.is_err());
+        let err = err_res.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("too short"));
+
+        let mut wrong_magic = written_bytes.clone();
+        wrong_magic[0..4].copy_from_slice(b"ZIP2");
+        let mut buf = Vec::new();
+        let err_res = HuffmanFile::read(wrong_magic, &mut buf);
+        assert!(err_res.is_err());
+        let err = err_res.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("Invalid magic number"));
     }
 }

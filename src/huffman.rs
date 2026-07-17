@@ -1,11 +1,13 @@
 use crate::file::BitReader;
 
-struct Leaf {
-    frequency: u64,
-    data: u8,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Leaf {
+    pub frequency: u64,
+    pub data: u8,
 }
 
-struct Branch {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Branch {
     frequency: u64,
     left: u64,
     right: u64,
@@ -21,7 +23,8 @@ impl Branch {
     }
 }
 
-enum Node {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Node {
     Leaf(Leaf),
     Branch(Branch),
 }
@@ -37,7 +40,7 @@ impl Node {
 
 pub struct Tree {
     pub root: Option<usize>,
-    nodes: Vec<Node>,
+    pub nodes: Vec<Node>,
     cache: Box<[Option<String>; 256]>,
 }
 
@@ -173,6 +176,15 @@ impl Tree {
             }
         }
     }
+
+    pub fn import(from: Vec<Leaf>) -> Self {
+        let nodes: Vec<Node> = from.into_iter().map(Node::Leaf).collect();
+        Tree {
+            root: None,
+            nodes,
+            cache: vec![None; 256].into_boxed_slice().try_into().unwrap(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -208,34 +220,37 @@ mod tests {
         let mut tree = Tree::new();
 
         tree.add_leaf(b'A');
-        assert_eq!(tree.nodes.len(), 1);
-        match &tree.nodes[0] {
-            Node::Leaf(leaf) => {
-                assert_eq!(leaf.data, b'A');
-                assert_eq!(leaf.frequency, 1);
-            }
-            _ => panic!("Expected a leaf node"),
-        }
+        assert_eq!(
+            tree.nodes,
+            vec![Node::Leaf(Leaf {
+                data: b'A',
+                frequency: 1
+            })]
+        );
 
         tree.add_leaf(b'A');
-        assert_eq!(tree.nodes.len(), 1);
-        match &tree.nodes[0] {
-            Node::Leaf(leaf) => {
-                assert_eq!(leaf.data, b'A');
-                assert_eq!(leaf.frequency, 2);
-            }
-            _ => panic!("Expected a leaf node"),
-        }
+        assert_eq!(
+            tree.nodes,
+            vec![Node::Leaf(Leaf {
+                data: b'A',
+                frequency: 2
+            })]
+        );
 
         tree.add_leaf(b'B');
-        assert_eq!(tree.nodes.len(), 2);
-        match &tree.nodes[1] {
-            Node::Leaf(leaf) => {
-                assert_eq!(leaf.data, b'B');
-                assert_eq!(leaf.frequency, 1);
-            }
-            _ => panic!("Expected a leaf node"),
-        }
+        assert_eq!(
+            tree.nodes,
+            vec![
+                Node::Leaf(Leaf {
+                    data: b'A',
+                    frequency: 2
+                }),
+                Node::Leaf(Leaf {
+                    data: b'B',
+                    frequency: 1
+                }),
+            ]
+        );
     }
 
     #[test]
@@ -253,18 +268,23 @@ mod tests {
 
         tree.sort_nodes();
 
-        assert_eq!(tree.nodes.len(), 3);
-
-        let get_leaf_data_and_freq = |node: &Node| -> (u8, u64) {
-            match node {
-                Node::Leaf(leaf) => (leaf.data, leaf.frequency),
-                _ => panic!("Expected leaf"),
-            }
-        };
-
-        assert_eq!(get_leaf_data_and_freq(&tree.nodes[0]), (b'B', 1));
-        assert_eq!(get_leaf_data_and_freq(&tree.nodes[1]), (b'C', 2));
-        assert_eq!(get_leaf_data_and_freq(&tree.nodes[2]), (b'A', 3));
+        assert_eq!(
+            tree.nodes,
+            vec![
+                Node::Leaf(Leaf {
+                    data: b'B',
+                    frequency: 1
+                }),
+                Node::Leaf(Leaf {
+                    data: b'C',
+                    frequency: 2
+                }),
+                Node::Leaf(Leaf {
+                    data: b'A',
+                    frequency: 3
+                }),
+            ]
+        );
     }
 
     #[test]
@@ -317,7 +337,7 @@ mod tests {
         let tree = build_abc_tree();
 
         let buffer = vec![0x70];
-        let mut reader = BitReader::new(&buffer);
+        let mut reader = BitReader::new(&buffer, 8);
 
         assert_eq!(tree.get_next_leaf(&mut reader), Some(b'A'));
         assert_eq!(tree.get_next_leaf(&mut reader), Some(b'B'));
@@ -330,7 +350,7 @@ mod tests {
         let tree = build_abc_tree();
 
         let buffer = Vec::new();
-        let mut reader = BitReader::new(&buffer);
+        let mut reader = BitReader::new(&buffer, 0);
 
         assert_eq!(tree.get_next_leaf(&mut reader), None);
     }
@@ -346,17 +366,19 @@ mod tests {
         tree.construct_tree().unwrap();
 
         let mut buffer = Vec::new();
-        {
+        let bit_count = {
             let mut writer = BitWriter::new(&mut buffer);
             for &byte in input_bytes {
                 let bits = tree.find_leaf(byte, None).unwrap();
                 let reversed_bits: String = bits.chars().rev().collect();
                 writer.push(&reversed_bits);
             }
+            let count = (writer.buffer.len() * 8 + writer.bit_count as usize) as u64;
             writer.flush();
-        }
+            count
+        };
 
-        let mut reader = BitReader::new(&buffer);
+        let mut reader = BitReader::new(&buffer, bit_count);
         let mut decoded_bytes = Vec::new();
 
         for _ in 0..input_bytes.len() {
@@ -394,5 +416,38 @@ mod tests {
         }
 
         assert!(buffer.is_empty());
+    }
+
+    #[test]
+    fn test_leaf_clone_and_copy() {
+        let leaf = Leaf {
+            data: b'A',
+            frequency: 10,
+        };
+        let cloned_leaf = leaf;
+        assert_eq!(cloned_leaf, leaf);
+
+        let copied_leaf = leaf;
+        assert_eq!(copied_leaf, leaf);
+    }
+
+    #[test]
+    fn test_node_clone_and_copy() {
+        let leaf = Node::Leaf(Leaf {
+            data: b'A',
+            frequency: 10,
+        });
+        let cloned_node = leaf;
+        assert_eq!(cloned_node, leaf);
+
+        let copied_node = leaf;
+        assert_eq!(copied_node, leaf);
+
+        let branch = Node::Branch(Branch::new(100, 1, 2));
+        let cloned_branch = branch;
+        assert_eq!(cloned_branch, branch);
+
+        let copied_branch = branch;
+        assert_eq!(copied_branch, branch);
     }
 }
