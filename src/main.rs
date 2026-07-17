@@ -4,6 +4,7 @@ use util::{ArgError, Config, print_usage, process_args};
 mod file;
 use file::{BitReader, BitWriter, HuffmanFile, create_output, get_chunk, open_file, write_chunk};
 use std::fs::File;
+use std::io::Seek;
 
 mod huffman;
 use huffman::Tree;
@@ -51,12 +52,6 @@ fn main() {
         }
     };
 
-    let mut chunk = Vec::new();
-    if let Err(e) = get_chunk(&mut input_file, &mut chunk) {
-        eprintln!("Error reading file '{}': {}", opts.input_file, e);
-        std::process::exit(1);
-    }
-
     if opts.compress {
         let mut output_file: File = match create_output(&opts.output_file) {
             Ok(file) => file,
@@ -67,9 +62,21 @@ fn main() {
         };
 
         let mut tree: Tree = Tree::new();
+        let mut chunk = Vec::new();
 
-        for byte in &chunk {
-            tree.add_leaf(*byte);
+        loop {
+            match get_chunk(&mut input_file, &mut chunk) {
+                Ok(0) => break,
+                Ok(_) => {
+                    for byte in &chunk {
+                        tree.add_leaf(*byte);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error reading file '{}': {}", opts.input_file, e);
+                    std::process::exit(1);
+                }
+            }
         }
 
         tree.nodes.retain(|x| x.is_some());
@@ -80,18 +87,34 @@ fn main() {
             std::process::exit(1);
         }
 
-        let mut buffer = Vec::new();
+        if let Err(e) = input_file.seek(std::io::SeekFrom::Start(0)) {
+            eprintln!("Error seeking input file '{}': {}", opts.input_file, e);
+            std::process::exit(1);
+        }
 
+        let mut buffer = Vec::new();
         let mut writer = BitWriter::new(&mut buffer);
-        for byte in &chunk {
-            let bits: String = match tree.find_leaf(*byte, None) {
-                Some(bits) => bits.chars().rev().collect(),
-                None => {
-                    eprintln!("Error: missing Huffman code for byte 0x{:02x}", byte);
+
+        loop {
+            match get_chunk(&mut input_file, &mut chunk) {
+                Ok(0) => break,
+                Ok(_) => {
+                    for byte in &chunk {
+                        let bits: String = match tree.find_leaf(*byte, None) {
+                            Some(bits) => bits.chars().rev().collect(),
+                            None => {
+                                eprintln!("Error: missing Huffman code for byte 0x{:02x}", byte);
+                                std::process::exit(1);
+                            }
+                        };
+                        writer.push(&bits);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error reading file '{}': {}", opts.input_file, e);
                     std::process::exit(1);
                 }
-            };
-            writer.push(&bits);
+            }
         }
 
         let bit_count = (writer.buffer.len() * 8 + writer.bit_count as usize) as u64;
@@ -110,10 +133,26 @@ fn main() {
     }
 
     if opts.decompress {
+        let mut compressed_file_data = Vec::new();
+        let mut chunk = Vec::new();
+
+        loop {
+            match get_chunk(&mut input_file, &mut chunk) {
+                Ok(0) => break,
+                Ok(_) => {
+                    compressed_file_data.extend_from_slice(&chunk);
+                }
+                Err(e) => {
+                    eprintln!("Error reading file '{}': {}", opts.input_file, e);
+                    std::process::exit(1);
+                }
+            }
+        }
+
         let mut buffer: Vec<u8> = Vec::new();
 
         let (leaves, data_len) = {
-            let h_file = match HuffmanFile::read(&chunk, &mut buffer) {
+            let h_file = match HuffmanFile::read(&compressed_file_data, &mut buffer) {
                 Ok(file) => file,
                 Err(e) => {
                     eprintln!("Error reading compressed file: {}", e);
