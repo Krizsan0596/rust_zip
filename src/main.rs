@@ -107,6 +107,7 @@ fn main() {
                                 std::process::exit(1);
                             }
                         };
+                        tree.cache_leaf(byte, &bits);
                         writer.push(&bits);
                     }
                 }
