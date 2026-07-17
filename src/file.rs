@@ -172,7 +172,7 @@ impl<'a> HuffmanFile<'a> {
             .reserve(new.leaf_count as usize + 1 - new.leaves.len());
 
         for idx in 0..=new.leaf_count {
-            if let Node::Leaf(leaf) = tree.nodes[idx as usize] {
+            if let Some(Node::Leaf(leaf)) = tree.nodes[idx as usize] {
                 new.leaves.push(leaf);
             }
         }

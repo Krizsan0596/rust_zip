@@ -74,6 +74,8 @@ fn main() {
             tree.add_leaf(*byte);
         }
 
+        tree.nodes.retain(|x| x.is_some());
+
         tree.sort_nodes();
         if let Err(e) = tree.construct_tree() {
             eprintln!("Error while constructing Huffman tree: {}", e);

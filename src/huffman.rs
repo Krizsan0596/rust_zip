@@ -40,7 +40,7 @@ impl Node {
 
 pub struct Tree {
     pub root: Option<usize>,
-    pub nodes: Vec<Node>,
+    pub nodes: Vec<Option<Node>>,
     cache: Box<[Option<String>; 256]>,
 }
 
@@ -48,7 +48,7 @@ impl Tree {
     pub fn new() -> Self {
         Tree {
             root: None,
-            nodes: Vec::new(),
+            nodes: vec![None; 256],
             cache: vec![None; 256].into_boxed_slice().try_into().unwrap(),
         }
     }
@@ -58,26 +58,24 @@ impl Tree {
     // }
 
     pub fn add_leaf(&mut self, value: u8) {
-        if let Some(node) = self.nodes.iter_mut().find(|node| match node {
-            Node::Leaf(leaf) => leaf.data == value,
-            _ => false,
-        }) {
-            if let Node::Leaf(leaf) = node {
-                leaf.frequency += 1;
-            }
+        if let Some(Node::Leaf(ref mut leaf)) = self.nodes[value as usize] {
+            leaf.frequency += 1;
         } else {
-            self.nodes.push(Node::Leaf(Leaf {
-                data: value,
+            self.nodes[value as usize] = Some(Node::Leaf(Leaf {
                 frequency: 1,
+                data: value,
             }));
         }
     }
 
     pub fn sort_nodes(&mut self) {
-        self.nodes.sort_unstable_by_key(|x| x.frequency());
+        self.nodes.retain(|x| x.is_some());
+        self.nodes
+            .sort_unstable_by_key(|x| x.as_ref().map(|y| y.frequency()));
     }
 
     pub fn construct_tree(&mut self) -> Result<(), std::io::Error> {
+        self.nodes.retain(|x| x.is_some());
         if self.nodes.is_empty() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -95,10 +93,11 @@ impl Tree {
         let mut current_leaf: usize = 0;
         let mut current_branch: usize = leaf_count;
 
-        let next_node = |leaf: &mut usize, branch: &mut usize, nodes: &[Node]| -> usize {
+        let next_node = |leaf: &mut usize, branch: &mut usize, nodes: &[Option<Node>]| -> usize {
             if *leaf < leaf_count
                 && (*branch == nodes.len()
-                    || nodes[*leaf].frequency() <= nodes[*branch].frequency())
+                    || nodes[*leaf].as_ref().unwrap().frequency()
+                        <= nodes[*branch].as_ref().unwrap().frequency())
             {
                 let idx = *leaf;
                 *leaf += 1;
@@ -114,9 +113,13 @@ impl Tree {
             let left = next_node(&mut current_leaf, &mut current_branch, &self.nodes);
             let right = next_node(&mut current_leaf, &mut current_branch, &self.nodes);
 
-            let freq: u64 = self.nodes[left].frequency() + self.nodes[right].frequency();
-            self.nodes
-                .push(Node::Branch(Branch::new(freq, left as u64, right as u64)));
+            let freq: u64 = self.nodes[left].as_ref().unwrap().frequency()
+                + self.nodes[right].as_ref().unwrap().frequency();
+            self.nodes.push(Some(Node::Branch(Branch::new(
+                freq,
+                left as u64,
+                right as u64,
+            ))));
             self.root = Some(self.nodes.len() - 1);
         }
 
@@ -142,14 +145,14 @@ impl Tree {
         }
 
         match &self.nodes[root] {
-            Node::Leaf(leaf) => {
+            Some(Node::Leaf(leaf)) => {
                 if leaf.data == data {
                     Some(String::new())
                 } else {
                     None
                 }
             }
-            Node::Branch(branch) => {
+            Some(Node::Branch(branch)) => {
                 if let Some(mut x) = self.find_leaf(data, Some(branch.left as usize)) {
                     x.push('0');
                     Some(x)
@@ -160,17 +163,18 @@ impl Tree {
                     None
                 }
             }
+            None => None,
         }
     }
 
     pub fn get_next_leaf<'a>(&self, reader: &mut BitReader<'a>) -> Option<u8> {
-        let mut root: &Node = &self.nodes[*self.root.as_ref().unwrap()];
+        let mut root: &Node = self.nodes[*self.root.as_ref().unwrap()].as_ref().unwrap();
         loop {
             root = match root {
                 Node::Leaf(leaf) => return Some(leaf.data),
                 Node::Branch(branch) => match reader.read_bit() {
-                    Some(true) => &self.nodes[branch.right as usize],
-                    Some(false) => &self.nodes[branch.left as usize],
+                    Some(true) => self.nodes[branch.right as usize].as_ref().unwrap(),
+                    Some(false) => self.nodes[branch.left as usize].as_ref().unwrap(),
                     None => return None,
                 },
             }
@@ -178,7 +182,10 @@ impl Tree {
     }
 
     pub fn import(from: Vec<Leaf>) -> Self {
-        let nodes: Vec<Node> = from.into_iter().map(Node::Leaf).collect();
+        let nodes: Vec<Option<Node>> = from
+            .into_iter()
+            .map(|leaf| Some(Node::Leaf(leaf)))
+            .collect();
         Tree {
             root: None,
             nodes,
@@ -197,7 +204,8 @@ mod tests {
     fn test_tree_new() {
         let tree = Tree::new();
         assert!(tree.root.is_none());
-        assert!(tree.nodes.is_empty());
+        assert_eq!(tree.nodes.len(), 256);
+        assert!(tree.nodes.iter().all(|x| x.is_none()));
         for i in 0..256 {
             assert!(tree.cache[i].is_none());
         }
@@ -221,7 +229,7 @@ mod tests {
 
         tree.add_leaf(b'A');
         assert_eq!(
-            tree.nodes,
+            tree.nodes.iter().filter_map(|&x| x).collect::<Vec<_>>(),
             vec![Node::Leaf(Leaf {
                 data: b'A',
                 frequency: 1
@@ -230,7 +238,7 @@ mod tests {
 
         tree.add_leaf(b'A');
         assert_eq!(
-            tree.nodes,
+            tree.nodes.iter().filter_map(|&x| x).collect::<Vec<_>>(),
             vec![Node::Leaf(Leaf {
                 data: b'A',
                 frequency: 2
@@ -239,7 +247,7 @@ mod tests {
 
         tree.add_leaf(b'B');
         assert_eq!(
-            tree.nodes,
+            tree.nodes.iter().filter_map(|&x| x).collect::<Vec<_>>(),
             vec![
                 Node::Leaf(Leaf {
                     data: b'A',
@@ -271,18 +279,18 @@ mod tests {
         assert_eq!(
             tree.nodes,
             vec![
-                Node::Leaf(Leaf {
+                Some(Node::Leaf(Leaf {
                     data: b'B',
                     frequency: 1
-                }),
-                Node::Leaf(Leaf {
+                })),
+                Some(Node::Leaf(Leaf {
                     data: b'C',
                     frequency: 2
-                }),
-                Node::Leaf(Leaf {
+                })),
+                Some(Node::Leaf(Leaf {
                     data: b'A',
                     frequency: 3
-                }),
+                })),
             ]
         );
     }
