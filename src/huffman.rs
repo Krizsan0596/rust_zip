@@ -337,7 +337,7 @@ mod tests {
         let tree = build_abc_tree();
 
         let buffer = vec![0x70];
-        let mut reader = BitReader::new(&buffer);
+        let mut reader = BitReader::new(&buffer, 8);
 
         assert_eq!(tree.get_next_leaf(&mut reader), Some(b'A'));
         assert_eq!(tree.get_next_leaf(&mut reader), Some(b'B'));
@@ -350,7 +350,7 @@ mod tests {
         let tree = build_abc_tree();
 
         let buffer = Vec::new();
-        let mut reader = BitReader::new(&buffer);
+        let mut reader = BitReader::new(&buffer, 0);
 
         assert_eq!(tree.get_next_leaf(&mut reader), None);
     }
@@ -366,17 +366,19 @@ mod tests {
         tree.construct_tree().unwrap();
 
         let mut buffer = Vec::new();
-        {
+        let bit_count = {
             let mut writer = BitWriter::new(&mut buffer);
             for &byte in input_bytes {
                 let bits = tree.find_leaf(byte, None).unwrap();
                 let reversed_bits: String = bits.chars().rev().collect();
                 writer.push(&reversed_bits);
             }
+            let count = (writer.buffer.len() * 8 + writer.bit_count as usize) as u64;
             writer.flush();
-        }
+            count
+        };
 
-        let mut reader = BitReader::new(&buffer);
+        let mut reader = BitReader::new(&buffer, bit_count);
         let mut decoded_bytes = Vec::new();
 
         for _ in 0..input_bytes.len() {

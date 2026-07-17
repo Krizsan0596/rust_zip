@@ -93,9 +93,12 @@ fn main() {
             };
             writer.push(&bits);
         }
+
+        let bit_count = (writer.buffer.len() * 8 + writer.bit_count as usize) as u64;
+
         writer.flush();
 
-        let h_file = HuffmanFile::new(&tree, &buffer);
+        let h_file = HuffmanFile::new(&tree, &buffer, bit_count);
 
         let mut output: Vec<u8> = Vec::new();
         h_file.write(&mut output);
@@ -108,17 +111,26 @@ fn main() {
 
     if opts.decompress {
         let mut buffer: Vec<u8> = Vec::new();
-        let leaves = match HuffmanFile::read(chunk, &mut buffer) {
-            Ok(file) => file.leaves,
-            Err(e) => {
-                eprintln!("Error reading compressed file: {}", e);
-                std::process::exit(1);
-            }
+
+        let (leaves, data_len) = {
+            let h_file = match HuffmanFile::read(chunk, &mut buffer) {
+                Ok(file) => file,
+                Err(e) => {
+                    eprintln!("Error reading compressed file: {}", e);
+                    std::process::exit(1);
+                }
+            };
+
+            (h_file.leaves, h_file.data_len)
         };
 
-        let mut reader = BitReader::new(&buffer);
+        let mut reader = BitReader::new(&buffer, data_len);
 
-        let tree = Tree::import(leaves);
+        let mut tree = Tree::import(leaves);
+        if let Err(e) = tree.construct_tree() {
+            eprintln!("Error while constructing Huffman tree: {}", e);
+            std::process::exit(1);
+        }
 
         let mut output: Vec<u8> = Vec::new();
 

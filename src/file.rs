@@ -47,9 +47,9 @@ pub fn write_chunk(file: &mut File, chunk: &[u8]) -> Result<(), io::Error> {
 }
 
 pub struct BitWriter<'a> {
-    buffer: &'a mut Vec<u8>,
+    pub buffer: &'a mut Vec<u8>,
     byte: u8,
-    bit_count: u8,
+    pub bit_count: u8,
 }
 
 impl<'a> BitWriter<'a> {
@@ -95,22 +95,29 @@ pub struct BitReader<'a> {
     byte: u8,
     bit_count: u8,
     cursor: usize,
+    bits_read: u64,
+    total_bits: u64,
 }
 
 impl<'a> BitReader<'a> {
-    pub fn new(input: &'a Vec<u8>) -> Self {
+    pub fn new(input: &'a Vec<u8>, total_bits: u64) -> Self {
         BitReader {
             buffer: input,
             byte: 0,
             bit_count: 0,
             cursor: 0,
+            bits_read: 0,
+            total_bits,
         }
     }
 
     pub fn read_bit(&mut self) -> Option<bool> {
+        if self.bits_read == self.total_bits {
+            return None;
+        }
         if self.bit_count == 0 {
             if self.cursor == self.buffer.len() {
-                return None;
+                return None; // should panic?
             }
             self.byte = self.buffer[self.cursor];
             self.cursor += 1;
@@ -119,6 +126,7 @@ impl<'a> BitReader<'a> {
         let bit = (self.byte & (1 << (7 - self.bit_count))) != 0;
 
         self.bit_count += 1;
+        self.bits_read += 1;
         if self.bit_count == 8 {
             self.bit_count = 0;
         }
@@ -146,24 +154,24 @@ pub struct HuffmanFile<'a> {
     magic_number: [u8; 4],
     leaf_count: u8,
     pub leaves: Vec<Leaf>,
-    data_len: u64,
+    pub data_len: u64, // in bits
     compressed_data: &'a Vec<u8>,
 }
 
 impl<'a> HuffmanFile<'a> {
-    pub fn new(tree: &Tree, data: &'a Vec<u8>) -> Self {
+    pub fn new(tree: &Tree, data: &'a Vec<u8>, data_len: u64) -> Self {
         let mut new = HuffmanFile {
             magic_number: MAGIC_NUMBER,
-            leaf_count: tree.nodes.len().div_ceil(2) as u8,
+            leaf_count: (tree.nodes.len().div_ceil(2) - 1) as u8,
             leaves: Vec::new(),
-            data_len: data.len() as u64,
+            data_len,
             compressed_data: data,
         };
 
         new.leaves
-            .reserve(new.leaf_count as usize - new.leaves.len());
+            .reserve((new.leaf_count + 1) as usize - new.leaves.len());
 
-        for idx in 0..new.leaf_count {
+        for idx in 0..=new.leaf_count {
             if let Node::Leaf(leaf) = tree.nodes[idx as usize] {
                 new.leaves.push(leaf);
             }
@@ -175,12 +183,14 @@ impl<'a> HuffmanFile<'a> {
     pub fn write(&self, to: &mut Vec<u8>) {
         to.extend_from_slice(&self.magic_number);
 
-        to.push(self.leaves.len() as u8);
+        to.push(self.leaf_count);
 
         for leaf in &self.leaves {
             to.extend_from_slice(&leaf.frequency.to_be_bytes());
             to.push(leaf.data);
         }
+
+        to.extend_from_slice(&self.data_len.to_be_bytes());
 
         to.extend_from_slice(self.compressed_data);
     }
@@ -214,8 +224,8 @@ impl<'a> HuffmanFile<'a> {
         let leaf_count: u8 = from[cursor];
         cursor += 1;
 
-        let mut leaves: Vec<Leaf> = Vec::with_capacity(leaf_count as usize);
-        for _ in 0..leaf_count {
+        let mut leaves: Vec<Leaf> = Vec::with_capacity((leaf_count + 1) as usize);
+        for _ in 0..leaf_count + 1 {
             if cursor + 9 > from.len() {
                 return Err(io::Error::new(
                     io::ErrorKind::UnexpectedEof,
@@ -232,13 +242,18 @@ impl<'a> HuffmanFile<'a> {
             });
         }
 
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(&from[cursor..cursor + 8]);
+        let data_len = u64::from_be_bytes(bytes);
+        cursor += 8;
+
         buffer.extend_from_slice(&from[cursor..]);
 
         Ok(Self {
             magic_number,
             leaf_count,
             leaves,
-            data_len: buffer.len() as u64,
+            data_len,
             compressed_data: buffer,
         })
     }
@@ -296,7 +311,7 @@ mod tests {
     #[test]
     fn test_bit_reader_basic() {
         let buffer = vec![160]; // 10100000
-        let mut reader = BitReader::new(&buffer);
+        let mut reader = BitReader::new(&buffer, 8);
 
         assert_eq!(reader.read_bit(), Some(true));
         assert_eq!(reader.read_bit(), Some(false));
@@ -312,14 +327,14 @@ mod tests {
     #[test]
     fn test_bit_reader_empty() {
         let buffer = Vec::new();
-        let mut reader = BitReader::new(&buffer);
+        let mut reader = BitReader::new(&buffer, 0);
         assert_eq!(reader.read_bit(), None);
     }
 
     #[test]
     fn test_bit_reader_multiple_bytes() {
         let buffer = vec![255, 0];
-        let mut reader = BitReader::new(&buffer);
+        let mut reader = BitReader::new(&buffer, 16);
 
         for _ in 0..8 {
             assert_eq!(reader.read_bit(), Some(true));
@@ -340,7 +355,7 @@ mod tests {
             writer.flush();
         }
 
-        let mut reader = BitReader::new(&buffer);
+        let mut reader = BitReader::new(&buffer, 16);
         let mut decoded = String::new();
 
         for _ in 0..15 {
@@ -432,7 +447,7 @@ mod tests {
         tree.construct_tree().unwrap();
 
         let compressed_data = vec![1, 2, 3];
-        let h_file = HuffmanFile::new(&tree, &compressed_data);
+        let h_file = HuffmanFile::new(&tree, &compressed_data, 24);
 
         let mut written_bytes = Vec::new();
         h_file.write(&mut written_bytes);
