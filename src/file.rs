@@ -4,7 +4,7 @@ use std::path::Path;
 
 use crate::huffman::{Leaf, Node, Tree};
 
-const CHUNK_SIZE: usize = 1024 * 1024 * 8; // 8 MB
+pub const CHUNK_SIZE: usize = 1024 * 1024 * 8; // 8 MB
 const MAGIC_NUMBER: [u8; 4] = *b"ZIP1";
 
 pub fn open_file(path: &str) -> Result<File, io::Error> {

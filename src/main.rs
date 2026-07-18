@@ -9,6 +9,8 @@ use std::io::Seek;
 mod huffman;
 use huffman::Tree;
 
+use crate::util::parallel_frequency_count;
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let name: String = args[0].clone();
@@ -61,24 +63,13 @@ fn main() {
             }
         };
 
-        let mut tree: Tree = Tree::new();
-        let mut chunk = Vec::new();
-
-        loop {
-            match get_chunk(&mut input_file, &mut chunk) {
-                Ok(0) => break,
-                Ok(_) => {
-                    for byte in &chunk {
-                        tree.add_leaf(*byte);
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Error reading file '{}': {}", opts.input_file, e);
-                    std::process::exit(1);
-                }
+        let mut tree = match parallel_frequency_count(&mut input_file, 3) {
+            Ok(tree) => tree,
+            Err(e) => {
+                eprintln!("Error reading file '{}': {}", opts.input_file, e);
+                std::process::exit(1);
             }
-        }
-
+        };
         tree.nodes.retain(|x| x.is_some());
 
         tree.sort_nodes();
@@ -93,6 +84,7 @@ fn main() {
             std::process::exit(1);
         }
 
+        let mut chunk = Vec::new();
         let mut buffer = Vec::new();
         let mut writer = BitWriter::new(&mut buffer);
 

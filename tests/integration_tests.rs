@@ -119,8 +119,7 @@ fn test_cli_round_trip_large_file() {
     let compressed_path = dir.path().join("large_compressed.bin");
     let decompressed_path = dir.path().join("large_decompressed.txt");
 
-    let chunk_size = 1024 * 1024 * 8;
-    let large_size = chunk_size + 1024 * 1024; // 9 MB
+    let large_size = 1024 * 1024 * 100; // 100 MB
     let mut large_content = Vec::with_capacity(large_size);
     for i in 0..large_size {
         large_content.push((i % 256) as u8);
