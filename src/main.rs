@@ -86,6 +86,7 @@ fn main() {
             eprintln!("Error while constructing Huffman tree: {}", e);
             std::process::exit(1);
         }
+        tree.populate_cache(None, None);
 
         if let Err(e) = input_file.seek(std::io::SeekFrom::Start(0)) {
             eprintln!("Error seeking input file '{}': {}", opts.input_file, e);
@@ -100,15 +101,8 @@ fn main() {
                 Ok(0) => break,
                 Ok(_) => {
                     for byte in &chunk {
-                        let bits: String = match tree.find_leaf(*byte, None) {
-                            Some(bits) => bits.chars().rev().collect(),
-                            None => {
-                                eprintln!("Error: missing Huffman code for byte 0x{:02x}", byte);
-                                std::process::exit(1);
-                            }
-                        };
-                        tree.cache_leaf(byte, &bits);
-                        writer.push(&bits);
+                        let bits = tree.find_leaf(*byte);
+                        writer.push(bits.unwrap());
                     }
                 }
                 Err(e) => {

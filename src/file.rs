@@ -61,12 +61,11 @@ impl<'a> BitWriter<'a> {
         }
     }
 
-    pub fn push(&mut self, bits: &str) {
-        for b in bits.bytes() {
-            match b {
-                b'0' => self.byte <<= 1,
-                b'1' => self.byte = (self.byte << 1) | 1,
-                _ => continue,
+    pub fn push(&mut self, bits: (u32, u8)) {
+        for idx in 0..bits.1 {
+            match bits.0 & (1 << (bits.1 - 1 - idx)) {
+                0 => self.byte <<= 1,
+                _ => self.byte = (self.byte << 1) | 1,
             }
 
             self.bit_count += 1;
@@ -268,7 +267,7 @@ mod tests {
     fn test_bit_writer_basic_push() {
         let mut buffer = Vec::new();
         let mut writer = BitWriter::new(&mut buffer);
-        writer.push("101");
+        writer.push((5, 3)); // 0b101, 3 bits
         assert!(writer.buffer.is_empty());
         writer.flush();
         assert_eq!(*writer.buffer, vec![160]);
@@ -279,13 +278,13 @@ mod tests {
         let mut buffer = Vec::new();
         let mut writer = BitWriter::new(&mut buffer);
 
-        writer.push("11111111");
+        writer.push((255, 8));
         assert_eq!(*writer.buffer, vec![255]);
 
-        writer.push("00000000");
+        writer.push((0, 8));
         assert_eq!(*writer.buffer, vec![255, 0]);
 
-        writer.push("1010");
+        writer.push((10, 4)); // 0b1010, 4 bits
         assert_eq!(*writer.buffer, vec![255, 0]);
 
         writer.flush();
@@ -300,7 +299,7 @@ mod tests {
         writer.flush();
         assert!(writer.buffer.is_empty());
 
-        writer.push("1");
+        writer.push((1, 1));
         writer.flush();
         assert_eq!(*writer.buffer, vec![128]);
 
@@ -348,10 +347,10 @@ mod tests {
     #[test]
     fn test_round_trip() {
         let mut buffer = Vec::new();
-        let bit_string = "110110001100101"; // 15 bits
+        let val = 0b110110001100101; // 15 bits
         {
             let mut writer = BitWriter::new(&mut buffer);
-            writer.push(bit_string);
+            writer.push((val, 15));
             writer.flush();
         }
 
@@ -365,7 +364,7 @@ mod tests {
                 None => break,
             }
         }
-        assert_eq!(decoded, bit_string);
+        assert_eq!(decoded, "110110001100101");
 
         assert_eq!(reader.read_bit(), Some(false));
 
