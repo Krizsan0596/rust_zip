@@ -104,3 +104,36 @@ jobs:
           name: rust-coverage-report
           path: ./coverage-report
           retention-days: 7
+
+  flamegraph:
+    name: Flamegraph Profiling
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install flamegraph
+        uses: taiki-e/install-action@v2
+        with:
+          tool: flamegraph
+
+      - name: Configure kernel parameters for perf
+        run: |
+          sudo sysctl -w kernel.perf_event_paranoid=-1
+          sudo sysctl -w kernel.kptr_restrict=0
+
+      - name: Generate Flamegraph
+        env:
+          CARGO_PROFILE_RELEASE_DEBUG: "true"
+        run: |
+          dd if=/dev/urandom of=dummy.txt bs=1M count=100
+          cargo flamegraph --release --bin rust_zip -- -c -o dummy.zip dummy.txt
+
+      - name: Upload Flamegraph Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flamegraph
+          path: flamegraph.svg
