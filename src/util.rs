@@ -54,7 +54,7 @@ pub fn parallel_frequency_count(file: &mut File, max_threads: usize) -> Result<T
     let chunk_count = if file_size == 0 {
         0
     } else {
-        ((file_size + CHUNK_SIZE as u64 - 1) / CHUNK_SIZE as u64) as usize
+        file_size.div_ceil(CHUNK_SIZE as u64) as usize
     };
     let threads = max_threads.min(chunk_count);
 
@@ -123,7 +123,7 @@ pub fn parallel_compression(
     let chunk_count = if file_size == 0 {
         0
     } else {
-        ((file_size + CHUNK_SIZE as u64 - 1) / CHUNK_SIZE as u64) as usize
+        file_size.div_ceil(CHUNK_SIZE as u64) as usize
     };
     let threads = max_threads.min(chunk_count);
 
@@ -136,8 +136,10 @@ pub fn parallel_compression(
         }
     }
 
+    type ChunkData = (Vec<u8>, u64);
+
     let shared = Mutex::new(SharedReader { file, index: 0 });
-    let results: Mutex<Vec<(usize, (Vec<u8>, u64))>> = Mutex::new(Vec::new());
+    let results: Mutex<Vec<(usize, ChunkData)>> = Mutex::new(Vec::new());
     let error: Mutex<Option<Error>> = Mutex::new(None);
 
     thread::scope(|s| {
@@ -189,7 +191,7 @@ pub fn parallel_compression(
 
 fn merge_bit_streams(streams: &[(Vec<u8>, u64)]) -> (Vec<u8>, u64) {
     let total_bits: u64 = streams.iter().map(|(_, bits)| bits).sum();
-    let mut res = Vec::with_capacity((total_bits as usize + 7) / 8);
+    let mut res = Vec::with_capacity((total_bits as usize).div_ceil(8));
 
     let mut current_byte = 0u8;
     let mut offset = 0u32;
@@ -205,10 +207,9 @@ fn merge_bit_streams(streams: &[(Vec<u8>, u64)]) -> (Vec<u8>, u64) {
         if offset == 0 {
             res.extend_from_slice(&data[..full_bytes]);
         } else {
-            for i in 0..full_bytes {
-                let b = data[i];
-                res.push(current_byte | (b >> offset));
-                current_byte = b << (8 - offset);
+            for item in data.iter().take(full_bytes) {
+                res.push(current_byte | (item >> offset));
+                current_byte = item << (8 - offset);
             }
         }
 
