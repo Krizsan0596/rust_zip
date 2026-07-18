@@ -189,6 +189,7 @@ pub fn parallel_compression(
     Ok(result)
 }
 
+#[cfg_attr(no_inline, inline(never))]
 fn merge_bit_streams(streams: &[(Vec<u8>, u64)]) -> (Vec<u8>, u64) {
     let total_bits: u64 = streams.iter().map(|(_, bits)| bits).sum();
     let mut res = Vec::with_capacity((total_bits as usize).div_ceil(8));

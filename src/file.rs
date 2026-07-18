@@ -63,6 +63,7 @@ impl<'a> BitWriter<'a> {
         }
     }
 
+    #[inline]
     pub fn push(&mut self, bits: (u32, u8)) {
         for idx in 0..bits.1 {
             match bits.0 & (1 << (bits.1 - 1 - idx)) {
