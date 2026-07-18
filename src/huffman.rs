@@ -123,11 +123,7 @@ impl Tree {
     }
 
     pub fn find_leaf(&self, leaf: u8) -> Option<(u32, u8)> {
-        if let Some(res) = &self.cache[leaf as usize] {
-            Some(*res)
-        } else {
-            None
-        }
+        self.cache[leaf as usize].as_ref().map(|res| *res)
     }
 
     pub fn populate_cache(&mut self, root: Option<usize>, current_path: Option<(u32, u8)>) {
@@ -441,5 +437,4 @@ mod tests {
         let copied_branch = branch;
         assert_eq!(copied_branch, branch);
     }
-
 }
