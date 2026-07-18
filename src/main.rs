@@ -43,6 +43,16 @@ fn main() {
                 print_usage(&name);
                 std::process::exit(1);
             }
+            ArgError::MissingThreadsArg => {
+                eprintln!("Error: -t option requires an argument");
+                print_usage(&name);
+                std::process::exit(1);
+            }
+            ArgError::InvalidThreadsArg => {
+                eprintln!("Error: -t option requires a valid positive integer");
+                print_usage(&name);
+                std::process::exit(1);
+            }
         },
     };
 
@@ -63,7 +73,7 @@ fn main() {
             }
         };
 
-        let mut tree = match parallel_frequency_count(&mut input_file, 3) {
+        let mut tree = match parallel_frequency_count(&mut input_file, opts.max_threads) {
             Ok(tree) => tree,
             Err(e) => {
                 eprintln!("Error reading file '{}': {}", opts.input_file, e);
@@ -84,13 +94,14 @@ fn main() {
             std::process::exit(1);
         }
 
-        let (buffer, bit_count) = match parallel_compression(&mut input_file, &tree, 3) {
-            Ok(res) => res,
-            Err(e) => {
-                eprintln!("Error while compressing file: '{}': {}", opts.input_file, e);
-                std::process::exit(1);
-            }
-        };
+        let (buffer, bit_count) =
+            match parallel_compression(&mut input_file, &tree, opts.max_threads) {
+                Ok(res) => res,
+                Err(e) => {
+                    eprintln!("Error while compressing file: '{}': {}", opts.input_file, e);
+                    std::process::exit(1);
+                }
+            };
 
         let h_file = HuffmanFile::new(&tree, &buffer, bit_count);
 

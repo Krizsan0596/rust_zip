@@ -12,6 +12,8 @@ pub enum ArgError {
     ConflictingModes,
     NoModeSpecified,
     MissingInput,
+    MissingThreadsArg,
+    InvalidThreadsArg,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -20,6 +22,7 @@ pub struct Config {
     pub output_file: String,
     pub compress: bool,
     pub decompress: bool,
+    pub max_threads: usize,
 }
 
 pub struct SharedReader<'a> {
@@ -244,7 +247,10 @@ fn merge_bit_streams(streams: &[(Vec<u8>, u64)]) -> (Vec<u8>, u64) {
 }
 
 pub fn print_usage(program_name: &str) {
-    println!("Usage: {} [-c] [-x] [-o <output>] <input>", program_name);
+    println!(
+        "Usage: {} [-c] [-x] [-o <output>] [-t <threads>] <input>",
+        program_name
+    );
 }
 
 pub fn process_args(args: Vec<String>) -> Result<Config, ArgError> {
@@ -254,6 +260,7 @@ pub fn process_args(args: Vec<String>) -> Result<Config, ArgError> {
     let mut output: Option<String> = None;
     let mut compress: bool = false;
     let mut decompress: bool = false;
+    let mut max_threads: usize = 3;
 
     while let Some(arg) = iter.next() {
         match arg.as_str() {
@@ -271,6 +278,16 @@ pub fn process_args(args: Vec<String>) -> Result<Config, ArgError> {
                     output = Some(value);
                 } else {
                     return Err(ArgError::MissingOutputArg);
+                }
+            }
+            "-t" => {
+                if let Some(value) = iter.next() {
+                    match value.parse::<usize>() {
+                        Ok(num) if num > 0 => max_threads = num,
+                        _ => return Err(ArgError::InvalidThreadsArg),
+                    }
+                } else {
+                    return Err(ArgError::MissingThreadsArg);
                 }
             }
             other => {
@@ -306,6 +323,7 @@ pub fn process_args(args: Vec<String>) -> Result<Config, ArgError> {
         output_file,
         compress,
         decompress,
+        max_threads,
     })
 }
 
@@ -330,6 +348,7 @@ mod tests {
                 output_file: "out".to_string(),
                 compress: true,
                 decompress: false,
+                max_threads: 3,
             })
         );
     }
@@ -350,6 +369,7 @@ mod tests {
                 output_file: "out".to_string(),
                 compress: false,
                 decompress: true,
+                max_threads: 3,
             })
         );
     }
@@ -429,8 +449,72 @@ mod tests {
                 output_file: "out".to_string(),
                 compress: true,
                 decompress: false,
+                max_threads: 3,
             })
         );
+    }
+
+    #[test]
+    fn test_valid_threads() {
+        let args = vec![
+            "prog".to_string(),
+            "-c".to_string(),
+            "-o".to_string(),
+            "out".to_string(),
+            "-t".to_string(),
+            "8".to_string(),
+            "input".to_string(),
+        ];
+        assert_eq!(
+            process_args(args),
+            Ok(Config {
+                input_file: "input".to_string(),
+                output_file: "out".to_string(),
+                compress: true,
+                decompress: false,
+                max_threads: 8,
+            })
+        );
+    }
+
+    #[test]
+    fn test_missing_threads_arg() {
+        let args = vec![
+            "prog".to_string(),
+            "-c".to_string(),
+            "-o".to_string(),
+            "out".to_string(),
+            "-t".to_string(),
+        ];
+        assert_eq!(process_args(args), Err(ArgError::MissingThreadsArg));
+    }
+
+    #[test]
+    fn test_invalid_threads_format() {
+        let args = vec![
+            "prog".to_string(),
+            "-c".to_string(),
+            "-o".to_string(),
+            "out".to_string(),
+            "-t".to_string(),
+            "abc".to_string(),
+            "input".to_string(),
+        ];
+        assert_eq!(process_args(args), Err(ArgError::InvalidThreadsArg));
+    }
+
+    #[test]
+    fn test_invalid_threads_zero() {
+        let args = vec![
+            "prog".to_string(),
+            "-c".to_string(),
+            "-o".to_string(),
+            "out".to_string(),
+            "-t".to_string(),
+            "0".to_string(),
+            "input".to_string(),
+        ];
+        assert_eq!(process_args(args), Err(ArgError::InvalidThreadsArg));
     }
 
     #[test]
