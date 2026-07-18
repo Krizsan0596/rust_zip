@@ -41,7 +41,7 @@ impl Node {
 pub struct Tree {
     pub root: Option<usize>,
     pub nodes: Vec<Option<Node>>,
-    cache: Box<[Option<String>; 256]>,
+    cache: Box<[Option<(u32, u8)>; 256]>,
 }
 
 impl Tree {
@@ -52,10 +52,6 @@ impl Tree {
             cache: vec![None; 256].into_boxed_slice().try_into().unwrap(),
         }
     }
-
-    // pub fn get_node(&mut self, idx: usize) -> &mut Node {
-    //     &mut self.nodes[idx]
-    // }
 
     pub fn add_leaf(&mut self, value: u8) {
         if let Some(Node::Leaf(ref mut leaf)) = self.nodes[value as usize] {
@@ -126,50 +122,25 @@ impl Tree {
         Ok(())
     }
 
-    fn check_cache(&self, leaf: u8) -> Option<&String> {
-        if let Some(res) = &self.cache[leaf as usize] {
-            Some(res)
-        } else {
-            None
-        }
+    pub fn find_leaf(&self, leaf: u8) -> Option<(u32, u8)> {
+        self.cache[leaf as usize].as_ref().map(|res| *res)
     }
 
-    pub fn find_leaf(&self, data: u8, root: Option<usize>) -> Option<String> {
-        //Returns inverted
-        //path
+    pub fn populate_cache(&mut self, root: Option<usize>, current_path: Option<(u32, u8)>) {
         let root: usize = root.unwrap_or(*self.root.as_ref().unwrap());
-        if root == *self.root.as_ref().unwrap()
-            && let Some(path) = self.check_cache(data)
-        {
-            return Some(path.clone());
-        }
+        let current_path = current_path.unwrap_or((0, 0));
 
-        match &self.nodes[root] {
-            Some(Node::Leaf(leaf)) => {
-                if leaf.data == data {
-                    Some(String::new())
-                } else {
-                    None
-                }
-            }
+        match self.nodes[root] {
+            Some(Node::Leaf(leaf)) => self.cache[leaf.data as usize] = Some(current_path),
             Some(Node::Branch(branch)) => {
-                if let Some(mut x) = self.find_leaf(data, Some(branch.left as usize)) {
-                    x.push('0');
-                    Some(x)
-                } else if let Some(mut x) = self.find_leaf(data, Some(branch.right as usize)) {
-                    x.push('1');
-                    Some(x)
-                } else {
-                    None
-                }
+                let left_path = (current_path.0 << 1, current_path.1 + 1);
+                self.populate_cache(Some(branch.left as usize), Some(left_path));
+                let right_path = ((current_path.0 << 1) | 1, current_path.1 + 1);
+                self.populate_cache(Some(branch.right as usize), Some(right_path));
             }
-            None => None,
-        }
-    }
-
-    pub fn cache_leaf(&mut self, data: &u8, path: &str) {
-        if self.cache[*data as usize].is_none() {
-            self.cache[*data as usize] = Some(path.chars().rev().collect());
+            None => {
+                unreachable!();
+            }
         }
     }
 
@@ -317,9 +288,10 @@ mod tests {
         tree.add_leaf(b'X');
         assert!(tree.construct_tree().is_ok());
         assert_eq!(tree.root, Some(0));
+        tree.populate_cache(None, None);
 
-        assert_eq!(tree.find_leaf(b'X', None), Some(String::new()));
-        assert_eq!(tree.find_leaf(b'Y', None), None);
+        assert_eq!(tree.find_leaf(b'X'), Some((0, 0)));
+        assert_eq!(tree.find_leaf(b'Y'), None);
     }
 
     fn build_abc_tree() -> Tree {
@@ -332,6 +304,7 @@ mod tests {
         tree.add_leaf(b'C');
         tree.sort_nodes();
         tree.construct_tree().unwrap();
+        tree.populate_cache(None, None);
         tree
     }
 
@@ -339,11 +312,11 @@ mod tests {
     fn test_construct_tree_multiple() {
         let tree = build_abc_tree();
 
-        assert_eq!(tree.find_leaf(b'A', None), Some("0".to_string()));
-        assert_eq!(tree.find_leaf(b'C', None), Some("01".to_string()));
-        assert_eq!(tree.find_leaf(b'B', None), Some("11".to_string()));
+        assert_eq!(tree.find_leaf(b'A'), Some((0, 1)));
+        assert_eq!(tree.find_leaf(b'C'), Some((2, 2)));
+        assert_eq!(tree.find_leaf(b'B'), Some((3, 2)));
 
-        assert_eq!(tree.find_leaf(b'D', None), None);
+        assert_eq!(tree.find_leaf(b'D'), None);
     }
 
     #[test]
@@ -378,14 +351,14 @@ mod tests {
         }
         tree.sort_nodes();
         tree.construct_tree().unwrap();
+        tree.populate_cache(None, None);
 
         let mut buffer = Vec::new();
         let bit_count = {
             let mut writer = BitWriter::new(&mut buffer);
             for &byte in input_bytes {
-                let bits = tree.find_leaf(byte, None).unwrap();
-                let reversed_bits: String = bits.chars().rev().collect();
-                writer.push(&reversed_bits);
+                let bits = tree.find_leaf(byte).unwrap();
+                writer.push(bits);
             }
             let count = (writer.buffer.len() * 8 + writer.bit_count as usize) as u64;
             writer.flush();
@@ -415,16 +388,16 @@ mod tests {
         }
         tree.sort_nodes();
         tree.construct_tree().unwrap();
+        tree.populate_cache(None, None);
 
-        let bits = tree.find_leaf(b'A', None).unwrap();
-        assert_eq!(bits, "");
+        let bits = tree.find_leaf(b'A').unwrap();
+        assert_eq!(bits, (0, 0));
 
         let mut buffer = Vec::new();
         {
             let mut writer = BitWriter::new(&mut buffer);
             for &_ in input_bytes {
-                let reversed_bits: String = bits.chars().rev().collect();
-                writer.push(&reversed_bits);
+                writer.push(bits);
             }
             writer.flush();
         }
@@ -463,19 +436,5 @@ mod tests {
 
         let copied_branch = branch;
         assert_eq!(copied_branch, branch);
-    }
-
-    #[test]
-    fn test_cache_leaf() {
-        let mut tree = build_abc_tree();
-
-        // Before caching, find_leaf returns inverted path for 'C' which is "01"
-        assert_eq!(tree.find_leaf(b'C', None), Some("01".to_string()));
-
-        // Cache the correct path "10" for 'C'. It should be stored inverted as "01".
-        tree.cache_leaf(&b'C', "10");
-
-        // find_leaf should now hit the cache and return the stored inverted path "01"
-        assert_eq!(tree.find_leaf(b'C', None), Some("01".to_string()));
     }
 }
