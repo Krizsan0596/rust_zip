@@ -1,4 +1,4 @@
-use crate::file::{get_chunk, CHUNK_SIZE};
+use crate::file::{BitWriter, CHUNK_SIZE, get_chunk};
 use crate::huffman::Tree;
 use std::fs::File;
 use std::io::Error;
@@ -24,7 +24,7 @@ pub struct Config {
 
 pub struct SharedReader<'a> {
     file: &'a mut File,
-    index: usize
+    index: usize,
 }
 
 fn get_subtree(chunk: &[u8]) -> Tree {
@@ -35,6 +35,18 @@ fn get_subtree(chunk: &[u8]) -> Tree {
     }
 
     res
+}
+
+fn compress_chunk(chunk: &[u8], tree: &Tree) -> (Vec<u8>, u64) {
+    let mut res = Vec::new();
+    let mut writer = BitWriter::new(&mut res);
+    for byte in chunk {
+        let bits = tree.find_leaf(*byte);
+        writer.push(bits.unwrap());
+    }
+    let bit_count = (writer.buffer.len() * 8 + writer.bit_count as usize) as u64;
+    writer.flush();
+    (res, bit_count)
 }
 
 pub fn parallel_frequency_count(file: &mut File, max_threads: usize) -> Result<Tree, Error> {
@@ -55,7 +67,7 @@ pub fn parallel_frequency_count(file: &mut File, max_threads: usize) -> Result<T
         }
     }
 
-    let shared = Mutex::new(SharedReader {file, index: 0 });
+    let shared = Mutex::new(SharedReader { file, index: 0 });
     let results: Mutex<Vec<(usize, Tree)>> = Mutex::new(Vec::new());
     let error: Mutex<Option<Error>> = Mutex::new(None);
 
@@ -67,9 +79,11 @@ pub fn parallel_frequency_count(file: &mut File, max_threads: usize) -> Result<T
 
             s.spawn(move || {
                 let mut chunk = Vec::new();
-                
+
                 loop {
-                    if error.lock().unwrap().is_some() { return; }
+                    if error.lock().unwrap().is_some() {
+                        return;
+                    }
                     let idx = {
                         let mut guard = shared.lock().unwrap();
                         match get_chunk(guard.file, &mut chunk) {
@@ -98,6 +112,133 @@ pub fn parallel_frequency_count(file: &mut File, max_threads: usize) -> Result<T
 
     let results = results.into_inner().unwrap();
     Ok(Tree::merge(results.into_iter().map(|(_, x)| x).collect()))
+}
+
+pub fn parallel_compression(
+    file: &mut File,
+    tree: &Tree,
+    max_threads: usize,
+) -> Result<(Vec<u8>, u64), Error> {
+    let file_size = file.metadata()?.len();
+    let chunk_count = if file_size == 0 {
+        0
+    } else {
+        ((file_size + CHUNK_SIZE as u64 - 1) / CHUNK_SIZE as u64) as usize
+    };
+    let threads = max_threads.min(chunk_count);
+
+    if threads <= 1 {
+        let mut chunk = Vec::new();
+        match get_chunk(file, &mut chunk) {
+            Ok(0) => return Ok((Vec::new(), 0)),
+            Ok(_) => return Ok(compress_chunk(&chunk, tree)),
+            Err(e) => return Err(e),
+        }
+    }
+
+    let shared = Mutex::new(SharedReader { file, index: 0 });
+    let results: Mutex<Vec<(usize, (Vec<u8>, u64))>> = Mutex::new(Vec::new());
+    let error: Mutex<Option<Error>> = Mutex::new(None);
+
+    thread::scope(|s| {
+        for _ in 0..threads {
+            let shared = &shared;
+            let results = &results;
+            let error = &error;
+
+            s.spawn(move || {
+                let mut chunk = Vec::new();
+
+                loop {
+                    if error.lock().unwrap().is_some() {
+                        return;
+                    }
+                    let idx = {
+                        let mut guard = shared.lock().unwrap();
+                        match get_chunk(guard.file, &mut chunk) {
+                            Ok(0) => return,
+                            Ok(_) => (),
+                            Err(e) => {
+                                *error.lock().unwrap() = Some(e);
+                                return;
+                            }
+                        };
+                        let idx = guard.index;
+                        guard.index += 1;
+                        idx
+                    };
+
+                    let res = compress_chunk(&chunk, tree);
+                    results.lock().unwrap().push((idx, res));
+                }
+            });
+        }
+    });
+
+    if let Some(e) = error.into_inner().unwrap() {
+        return Err(e);
+    }
+
+    let mut results = results.into_inner().unwrap();
+    results.sort_unstable_by_key(|x| x.0);
+    let results: Vec<(Vec<u8>, u64)> = results.into_iter().map(|(_, v)| v).collect();
+
+    let result = merge_bit_streams(&results);
+    Ok(result)
+}
+
+fn merge_bit_streams(streams: &[(Vec<u8>, u64)]) -> (Vec<u8>, u64) {
+    let total_bits: u64 = streams.iter().map(|(_, bits)| bits).sum();
+    let mut res = Vec::with_capacity((total_bits as usize + 7) / 8);
+
+    let mut current_byte = 0u8;
+    let mut offset = 0u32;
+
+    for (data, bits) in streams {
+        if *bits == 0 {
+            continue;
+        }
+
+        let full_bytes = (bits / 8) as usize;
+        let remainder = (bits % 8) as u32;
+
+        if offset == 0 {
+            res.extend_from_slice(&data[..full_bytes]);
+        } else {
+            for i in 0..full_bytes {
+                let b = data[i];
+                res.push(current_byte | (b >> offset));
+                current_byte = b << (8 - offset);
+            }
+        }
+
+        if remainder > 0 {
+            let last_byte = data[full_bytes];
+            let mask = !((1 << (8 - remainder)) - 1);
+            let b = last_byte & mask;
+
+            if offset == 0 {
+                current_byte = b;
+                offset = remainder;
+            } else {
+                let combined = current_byte | (b >> offset);
+                if offset + remainder >= 8 {
+                    res.push(combined);
+                    current_byte = b << (8 - offset);
+                    offset = offset + remainder - 8;
+                } else {
+                    current_byte = combined;
+                    offset += remainder;
+                }
+            }
+        }
+    }
+
+    if offset > 0 {
+        res.push(current_byte);
+    }
+
+    (res, total_bits)
 }
 
 pub fn print_usage(program_name: &str) {
@@ -309,14 +450,14 @@ mod tests {
 
         let mut tree = parallel_frequency_count(&mut file, 3).unwrap();
         tree.nodes.retain(|x| x.is_some());
-        
+
         let mut leaf_counts = std::collections::HashMap::new();
         for node in tree.nodes {
             if let Some(crate::huffman::Node::Leaf(leaf)) = node {
                 leaf_counts.insert(leaf.data, leaf.frequency);
             }
         }
-        
+
         assert_eq!(leaf_counts.get(&b'a'), Some(&5));
         assert_eq!(leaf_counts.get(&b'b'), Some(&3));
         assert_eq!(leaf_counts.get(&b'c'), Some(&2));
@@ -326,13 +467,13 @@ mod tests {
     fn test_parallel_frequency_count_large() {
         use std::io::{Seek, Write};
         let mut file = tempfile::tempfile().unwrap();
-        
+
         // Write 10 MB of data
         // 5 MB of 'A', 3 MB of 'B', 2 MB of 'C'
         let a_data = vec![b'A'; 1024 * 1024 * 5];
         let b_data = vec![b'B'; 1024 * 1024 * 3];
         let c_data = vec![b'C'; 1024 * 1024 * 2];
-        
+
         file.write_all(&a_data).unwrap();
         file.write_all(&b_data).unwrap();
         file.write_all(&c_data).unwrap();
@@ -340,14 +481,14 @@ mod tests {
 
         let mut tree = parallel_frequency_count(&mut file, 3).unwrap();
         tree.nodes.retain(|x| x.is_some());
-        
+
         let mut leaf_counts = std::collections::HashMap::new();
         for node in tree.nodes {
             if let Some(crate::huffman::Node::Leaf(leaf)) = node {
                 leaf_counts.insert(leaf.data, leaf.frequency);
             }
         }
-        
+
         assert_eq!(leaf_counts.get(&b'A'), Some(&(1024 * 1024 * 5)));
         assert_eq!(leaf_counts.get(&b'B'), Some(&(1024 * 1024 * 3)));
         assert_eq!(leaf_counts.get(&b'C'), Some(&(1024 * 1024 * 2)));

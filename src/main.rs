@@ -2,14 +2,14 @@ mod util;
 use util::{ArgError, Config, print_usage, process_args};
 
 mod file;
-use file::{BitReader, BitWriter, HuffmanFile, create_output, get_chunk, open_file, write_chunk};
+use file::{BitReader, HuffmanFile, create_output, get_chunk, open_file, write_chunk};
 use std::fs::File;
 use std::io::Seek;
 
 mod huffman;
 use huffman::Tree;
 
-use crate::util::parallel_frequency_count;
+use crate::util::{parallel_compression, parallel_frequency_count};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -84,29 +84,13 @@ fn main() {
             std::process::exit(1);
         }
 
-        let mut chunk = Vec::new();
-        let mut buffer = Vec::new();
-        let mut writer = BitWriter::new(&mut buffer);
-
-        loop {
-            match get_chunk(&mut input_file, &mut chunk) {
-                Ok(0) => break,
-                Ok(_) => {
-                    for byte in &chunk {
-                        let bits = tree.find_leaf(*byte);
-                        writer.push(bits.unwrap());
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Error reading file '{}': {}", opts.input_file, e);
-                    std::process::exit(1);
-                }
+        let (buffer, bit_count) = match parallel_compression(&mut input_file, &tree, 3) {
+            Ok(res) => res,
+            Err(e) => {
+                eprintln!("Error while compressing file: '{}': {}", opts.input_file, e);
+                std::process::exit(1);
             }
-        }
-
-        let bit_count = (writer.buffer.len() * 8 + writer.bit_count as usize) as u64;
-
-        writer.flush();
+        };
 
         let h_file = HuffmanFile::new(&tree, &buffer, bit_count);
 
