@@ -41,7 +41,7 @@ fn get_subtree(chunk: &[u8]) -> Tree {
 }
 
 fn compress_chunk(chunk: &[u8], tree: &Tree) -> (Vec<u8>, u64) {
-    let mut res = Vec::new();
+    let mut res = Vec::with_capacity(chunk.len());
     let mut writer = BitWriter::new(&mut res);
     for byte in chunk {
         let bits = tree.find_leaf(*byte);
