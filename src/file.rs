@@ -89,7 +89,7 @@ impl<'a> BitWriter<'a> {
 
 pub struct BitReader<'a> {
     buffer: &'a Vec<u8>,
-    byte: u8,
+    accumulator: u64,
     bit_count: u8,
     cursor: usize,
     bits_read: u64,
@@ -100,7 +100,7 @@ impl<'a> BitReader<'a> {
     pub fn new(input: &'a Vec<u8>, total_bits: u64) -> Self {
         BitReader {
             buffer: input,
-            byte: 0,
+            accumulator: 0,
             bit_count: 0,
             cursor: 0,
             bits_read: 0,
@@ -108,42 +108,45 @@ impl<'a> BitReader<'a> {
         }
     }
 
+    #[inline(always)]
+    fn refill(&mut self) {
+        let bytes_left = self.buffer.len() - self.cursor;
+        if bytes_left >= 8 {
+            let mut bytes = [0u8; 8];
+            bytes.copy_from_slice(&self.buffer[self.cursor..self.cursor + 8]);
+            self.accumulator = u64::from_be_bytes(bytes);
+            self.bit_count = 64;
+            self.cursor += 8;
+        } else if bytes_left > 0 {
+            let mut temp = 0u64;
+            for i in 0..bytes_left {
+                temp |= (self.buffer[self.cursor + i] as u64) << (56 - i * 8);
+            }
+            self.accumulator = temp;
+            self.bit_count = (bytes_left * 8) as u8;
+            self.cursor += bytes_left;
+        }
+    }
+
+    #[inline]
     pub fn read_bit(&mut self) -> Option<bool> {
         if self.bits_read == self.total_bits {
             return None;
         }
         if self.bit_count == 0 {
-            if self.cursor == self.buffer.len() {
-                return None; // should panic?
+            self.refill();
+            if self.bit_count == 0 {
+                return None;
             }
-            self.byte = self.buffer[self.cursor];
-            self.cursor += 1;
         }
 
-        let bit = (self.byte & (1 << (7 - self.bit_count))) != 0;
-
-        self.bit_count += 1;
+        let bit = (self.accumulator & (1u64 << 63)) != 0;
+        self.accumulator <<= 1;
+        self.bit_count -= 1;
         self.bits_read += 1;
-        if self.bit_count == 8 {
-            self.bit_count = 0;
-        }
 
         Some(bit)
     }
-
-    // pub fn read_bits(&mut self, count: u8) -> Option<String> {
-    //     let mut out: String = String::new();
-    //
-    //     for _ in 0..count {
-    //         match self.read_bit() {
-    //             Some(false) => out.push('0'),
-    //             Some(true) => out.push('1'),
-    //             None => return None,
-    //         }
-    //     }
-    //
-    //     Some(out)
-    // }
 }
 
 #[derive(Debug, PartialEq)]
