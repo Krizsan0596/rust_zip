@@ -147,7 +147,7 @@ fn main() {
 
         let mut reader = BitReader::new(&buffer, data_len);
 
-        let mut tree = Tree::import(leaves);
+        let mut tree = Tree::import(&leaves);
         if let Err(e) = tree.construct_tree() {
             eprintln!("Error while constructing Huffman tree: {}", e);
             std::process::exit(1);

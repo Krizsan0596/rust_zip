@@ -41,7 +41,7 @@ impl Node {
 pub struct Tree {
     pub root: Option<usize>,
     pub nodes: Vec<Option<Node>>,
-    cache: Box<[Option<(u32, u8)>; 256]>,
+    cache: [Option<(u32, u8)>; 256],
 }
 
 impl Tree {
@@ -49,11 +49,10 @@ impl Tree {
         Tree {
             root: None,
             nodes: vec![None; 256],
-            cache: vec![None; 256].into_boxed_slice().try_into().unwrap(),
+            cache: [None; 256],
         }
     }
 
-    #[allow(dead_code)]
     pub fn merge(trees: Vec<Tree>) -> Self {
         let mut merged = Tree::new();
         for tree in trees {
@@ -71,6 +70,7 @@ impl Tree {
         merged
     }
 
+    #[allow(dead_code)]
     pub fn add_leaf(&mut self, value: u8) {
         if let Some(Node::Leaf(ref mut leaf)) = self.nodes[value as usize] {
             leaf.frequency += 1;
@@ -140,8 +140,9 @@ impl Tree {
         Ok(())
     }
 
+    #[inline]
     pub fn find_leaf(&self, leaf: u8) -> Option<(u32, u8)> {
-        self.cache[leaf as usize].as_ref().map(|res| *res)
+        self.cache[leaf as usize]
     }
 
     pub fn populate_cache(&mut self, root: Option<usize>, current_path: Option<(u32, u8)>) {
@@ -176,15 +177,16 @@ impl Tree {
         }
     }
 
-    pub fn import(from: Vec<Leaf>) -> Self {
+    pub fn import(from: &[Leaf]) -> Self {
         let nodes: Vec<Option<Node>> = from
-            .into_iter()
-            .map(|leaf| Some(Node::Leaf(leaf)))
+            .iter()
+            .filter(|leaf| leaf.frequency > 0)
+            .map(|leaf| Some(Node::Leaf(*leaf)))
             .collect();
         Tree {
             root: None,
             nodes,
-            cache: vec![None; 256].into_boxed_slice().try_into().unwrap(),
+            cache: [None; 256],
         }
     }
 }
@@ -204,6 +206,38 @@ mod tests {
         for i in 0..256 {
             assert!(tree.cache[i].is_none());
         }
+    }
+
+    #[test]
+    fn test_tree_import() {
+        let leaves = vec![
+            Leaf {
+                frequency: 10,
+                data: b'a',
+            },
+            Leaf {
+                frequency: 0,
+                data: b'b',
+            },
+            Leaf {
+                frequency: 5,
+                data: b'c',
+            },
+        ];
+        let tree = Tree::import(&leaves);
+        assert_eq!(
+            tree.nodes,
+            vec![
+                Some(Node::Leaf(Leaf {
+                    frequency: 10,
+                    data: b'a'
+                })),
+                Some(Node::Leaf(Leaf {
+                    frequency: 5,
+                    data: b'c'
+                })),
+            ]
+        );
     }
 
     #[test]
