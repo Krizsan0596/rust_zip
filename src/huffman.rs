@@ -53,7 +53,6 @@ impl Tree {
         }
     }
 
-    #[allow(dead_code)]
     pub fn merge(trees: Vec<Tree>) -> Self {
         let mut merged = Tree::new();
         for tree in trees {
@@ -71,6 +70,7 @@ impl Tree {
         merged
     }
 
+    #[allow(dead_code)]
     pub fn add_leaf(&mut self, value: u8) {
         if let Some(Node::Leaf(ref mut leaf)) = self.nodes[value as usize] {
             leaf.frequency += 1;
@@ -177,10 +177,11 @@ impl Tree {
         }
     }
 
-    pub fn import(from: Vec<Leaf>) -> Self {
+    pub fn import(from: &[Leaf]) -> Self {
         let nodes: Vec<Option<Node>> = from
-            .into_iter()
-            .map(|leaf| Some(Node::Leaf(leaf)))
+            .iter()
+            .filter(|leaf| leaf.frequency > 0)
+            .map(|leaf| Some(Node::Leaf(*leaf)))
             .collect();
         Tree {
             root: None,
@@ -205,6 +206,38 @@ mod tests {
         for i in 0..256 {
             assert!(tree.cache[i].is_none());
         }
+    }
+
+    #[test]
+    fn test_tree_import() {
+        let leaves = vec![
+            Leaf {
+                frequency: 10,
+                data: b'a',
+            },
+            Leaf {
+                frequency: 0,
+                data: b'b',
+            },
+            Leaf {
+                frequency: 5,
+                data: b'c',
+            },
+        ];
+        let tree = Tree::import(&leaves);
+        assert_eq!(
+            tree.nodes,
+            vec![
+                Some(Node::Leaf(Leaf {
+                    frequency: 10,
+                    data: b'a'
+                })),
+                Some(Node::Leaf(Leaf {
+                    frequency: 5,
+                    data: b'c'
+                })),
+            ]
+        );
     }
 
     #[test]

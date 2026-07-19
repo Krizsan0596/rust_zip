@@ -1,5 +1,5 @@
 use crate::file::{BitWriter, CHUNK_SIZE, get_chunk};
-use crate::huffman::Tree;
+use crate::huffman::{Leaf, Tree};
 use std::fs::File;
 use std::io::Error;
 use std::sync::Mutex;
@@ -31,13 +31,16 @@ pub struct SharedReader<'a> {
 }
 
 fn get_subtree(chunk: &[u8]) -> Tree {
-    let mut res = Tree::new();
+    let mut res: [Leaf; 256] = std::array::from_fn(|i| Leaf {
+        frequency: 0,
+        data: i as u8,
+    });
 
     for byte in chunk {
-        res.add_leaf(*byte);
+        res[*byte as usize].frequency += 1;
     }
 
-    res
+    Tree::import(&res)
 }
 
 fn compress_chunk(chunk: &[u8], tree: &Tree) -> (Vec<u8>, u64) {
