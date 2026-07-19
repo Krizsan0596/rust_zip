@@ -41,7 +41,7 @@ impl Node {
 pub struct Tree {
     pub root: Option<usize>,
     pub nodes: Vec<Option<Node>>,
-    cache: Box<[Option<(u32, u8)>; 256]>,
+    cache: [Option<(u32, u8)>; 256],
 }
 
 impl Tree {
@@ -49,7 +49,7 @@ impl Tree {
         Tree {
             root: None,
             nodes: vec![None; 256],
-            cache: vec![None; 256].into_boxed_slice().try_into().unwrap(),
+            cache: [None; 256],
         }
     }
 
@@ -140,8 +140,9 @@ impl Tree {
         Ok(())
     }
 
+    #[inline]
     pub fn find_leaf(&self, leaf: u8) -> Option<(u32, u8)> {
-        self.cache[leaf as usize].as_ref().map(|res| *res)
+        self.cache[leaf as usize]
     }
 
     pub fn populate_cache(&mut self, root: Option<usize>, current_path: Option<(u32, u8)>) {
@@ -184,7 +185,7 @@ impl Tree {
         Tree {
             root: None,
             nodes,
-            cache: vec![None; 256].into_boxed_slice().try_into().unwrap(),
+            cache: [None; 256],
         }
     }
 }
