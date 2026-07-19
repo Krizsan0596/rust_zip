@@ -4,7 +4,7 @@ use std::path::Path;
 
 use crate::huffman::{Leaf, Node, Tree};
 
-const CHUNK_SIZE: usize = 1024 * 1024 * 8; // 8 MB
+pub const CHUNK_SIZE: usize = 1024 * 1024 * 8; // 8 MB
 const MAGIC_NUMBER: [u8; 4] = *b"ZIP1";
 
 pub fn open_file(path: &str) -> Result<File, io::Error> {
@@ -50,7 +50,7 @@ pub fn write_chunk(file: &mut File, chunk: &[u8]) -> Result<(), io::Error> {
 
 pub struct BitWriter<'a> {
     pub buffer: &'a mut Vec<u8>,
-    byte: u8,
+    accumulator: u64,
     pub bit_count: u8,
 }
 
@@ -58,36 +58,32 @@ impl<'a> BitWriter<'a> {
     pub fn new(dest: &'a mut Vec<u8>) -> Self {
         BitWriter {
             buffer: dest,
-            byte: 0,
+            accumulator: 0,
             bit_count: 0,
         }
     }
 
+    #[inline]
     pub fn push(&mut self, bits: (u32, u8)) {
-        for idx in 0..bits.1 {
-            match bits.0 & (1 << (bits.1 - 1 - idx)) {
-                0 => self.byte <<= 1,
-                _ => self.byte = (self.byte << 1) | 1,
-            }
-
-            self.bit_count += 1;
-            if self.bit_count == 8 {
-                self.buffer.push(self.byte);
-                self.byte = 0;
-                self.bit_count = 0;
-            }
+        let (value, count) = bits;
+        if count > 32 {
+            unreachable!()
+        }
+        let mask = (1u64 << count) - 1;
+        self.accumulator = (self.accumulator << count) | (value as u64 & mask);
+        self.bit_count += count;
+        while self.bit_count >= 8 {
+            self.bit_count -= 8;
+            self.buffer.push((self.accumulator >> self.bit_count) as u8);
         }
     }
 
     pub fn flush(&mut self) {
-        if self.bit_count == 0 {
-            return;
+        if self.bit_count > 0 {
+            let pad = 8 - self.bit_count;
+            self.buffer.push((self.accumulator << pad) as u8);
+            self.bit_count = 0;
         }
-
-        self.byte <<= 8 - self.bit_count;
-        self.buffer.push(self.byte);
-        self.byte = 0;
-        self.bit_count = 0;
     }
 }
 

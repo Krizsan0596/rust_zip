@@ -53,6 +53,24 @@ impl Tree {
         }
     }
 
+    #[allow(dead_code)]
+    pub fn merge(trees: Vec<Tree>) -> Self {
+        let mut merged = Tree::new();
+        for tree in trees {
+            for node_opt in tree.nodes {
+                if let Some(Node::Leaf(leaf)) = node_opt {
+                    let idx = leaf.data as usize;
+                    if let Some(Node::Leaf(ref mut merged_leaf)) = merged.nodes[idx] {
+                        merged_leaf.frequency += leaf.frequency;
+                    } else {
+                        merged.nodes[idx] = Some(Node::Leaf(leaf));
+                    }
+                }
+            }
+        }
+        merged
+    }
+
     pub fn add_leaf(&mut self, value: u8) {
         if let Some(Node::Leaf(ref mut leaf)) = self.nodes[value as usize] {
             leaf.frequency += 1;
@@ -232,6 +250,37 @@ mod tests {
                 }),
                 Node::Leaf(Leaf {
                     data: b'B',
+                    frequency: 1
+                }),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_merge() {
+        let mut tree1 = Tree::new();
+        tree1.add_leaf(b'A');
+        tree1.add_leaf(b'B');
+
+        let mut tree2 = Tree::new();
+        tree2.add_leaf(b'A');
+        tree2.add_leaf(b'C');
+
+        let merged = Tree::merge(vec![tree1, tree2]);
+
+        assert_eq!(
+            merged.nodes.iter().filter_map(|&x| x).collect::<Vec<_>>(),
+            vec![
+                Node::Leaf(Leaf {
+                    data: b'A',
+                    frequency: 2
+                }),
+                Node::Leaf(Leaf {
+                    data: b'B',
+                    frequency: 1
+                }),
+                Node::Leaf(Leaf {
+                    data: b'C',
                     frequency: 1
                 }),
             ]

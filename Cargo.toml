@@ -3,9 +3,11 @@ name = "rust_zip"
 version = "0.0.1"
 edition = "2024"
 
+[lints.rust]
+unexpected_cfgs = "allow"
+
 [dependencies]
 
 [dev-dependencies]
 tempfile = "3.10.1"
 pretty_assertions = "1.4.0"
-
