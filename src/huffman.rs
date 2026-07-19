@@ -41,7 +41,7 @@ impl Node {
 pub struct Tree {
     pub root: Option<usize>,
     pub nodes: Vec<Option<Node>>,
-    cache: [Option<(u32, u8)>; 256],
+    pub cache: Box<[Option<(u32, u8)>; 256]>,
 }
 
 impl Tree {
@@ -49,7 +49,7 @@ impl Tree {
         Tree {
             root: None,
             nodes: vec![None; 256],
-            cache: [None; 256],
+            cache: Box::new([None; 256]),
         }
     }
 
@@ -140,6 +140,7 @@ impl Tree {
         Ok(())
     }
 
+    #[allow(dead_code)]
     #[inline]
     pub fn find_leaf(&self, leaf: u8) -> Option<(u32, u8)> {
         self.cache[leaf as usize]
@@ -186,7 +187,7 @@ impl Tree {
         Tree {
             root: None,
             nodes,
-            cache: [None; 256],
+            cache: Box::new([None; 256]),
         }
     }
 }
