@@ -4,7 +4,7 @@ use util::{ArgError, Config, print_usage, process_args};
 mod file;
 use file::{BitReader, HuffmanFile, create_output, get_chunk, open_file, write_chunk};
 use std::fs::File;
-use std::io::Seek;
+use std::io::{BufWriter, Seek, Write};
 
 mod huffman;
 use huffman::Tree;
@@ -153,13 +153,7 @@ fn main() {
             std::process::exit(1);
         }
 
-        let mut output: Vec<u8> = Vec::new();
-
-        while let Some(byte) = tree.get_next_leaf(&mut reader) {
-            output.push(byte);
-        }
-
-        let mut output_file: File = match create_output(&opts.output_file) {
+        let output_file: File = match create_output(&opts.output_file) {
             Ok(file) => file,
             Err(e) => {
                 eprintln!("Error creating file '{}': {}", opts.output_file, e);
@@ -167,8 +161,31 @@ fn main() {
             }
         };
 
-        if let Err(e) = write_chunk(&mut output_file, &output) {
-            eprintln!("Error writing file '{}': {}", opts.output_file, e);
+        let mut writer = BufWriter::new(output_file);
+        let mut buffer = [0u8; 8192];
+        let mut count = 0;
+
+        while let Some(byte) = tree.get_next_leaf(&mut reader) {
+            buffer[count] = byte;
+            count += 1;
+            if count == buffer.len() {
+                if let Err(e) = writer.write_all(&buffer) {
+                    eprintln!("Error writing to file '{}': {}", opts.output_file, e);
+                    std::process::exit(1);
+                }
+                count = 0;
+            }
+        }
+
+        if count > 0 {
+            if let Err(e) = writer.write_all(&buffer[..count]) {
+                eprintln!("Error writing to file '{}': {}", opts.output_file, e);
+                std::process::exit(1);
+            }
+        }
+
+        if let Err(e) = writer.flush() {
+            eprintln!("Error flushing output file '{}': {}", opts.output_file, e);
             std::process::exit(1);
         }
     }
