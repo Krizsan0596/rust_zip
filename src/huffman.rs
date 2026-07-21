@@ -97,7 +97,13 @@ impl Tree {
             ));
         }
         if self.nodes.len() == 1 {
-            self.root = Some(0);
+            let freq = self.nodes[0].as_ref().unwrap().frequency();
+            self.nodes.push(Some(Node::Branch(Branch::new(
+                freq,
+                0,
+                0,
+            ))));
+            self.root = Some(1);
             return Ok(());
         }
 
@@ -389,10 +395,10 @@ mod tests {
         let mut tree = Tree::new();
         tree.add_leaf(b'X');
         assert!(tree.construct_tree().is_ok());
-        assert_eq!(tree.root, Some(0));
+        assert_eq!(tree.root, Some(1));
         tree.populate_cache(None, None);
 
-        assert_eq!(tree.find_leaf(b'X'), Some((0, 0)));
+        assert_eq!(tree.find_leaf(b'X'), Some((1, 1)));
         assert_eq!(tree.find_leaf(b'Y'), None);
     }
 
@@ -493,18 +499,31 @@ mod tests {
         tree.populate_cache(None, None);
 
         let bits = tree.find_leaf(b'A').unwrap();
-        assert_eq!(bits, (0, 0));
+        assert_eq!(bits, (1, 1));
 
         let mut buffer = Vec::new();
-        {
+        let bit_count = {
             let mut writer = BitWriter::new(&mut buffer);
             for &_ in input_bytes {
                 writer.push(bits);
             }
+            let count = (writer.buffer.len() * 8 + writer.bit_count as usize) as u64;
             writer.flush();
-        }
+            count
+        };
 
-        assert!(buffer.is_empty());
+        assert!(!buffer.is_empty());
+
+        let mut reader = BitReader::new(&buffer, bit_count);
+        let mut decoded_bytes = Vec::new();
+        for _ in 0..input_bytes.len() {
+            if let Some(byte) = tree.get_next_leaf(&mut reader) {
+                decoded_bytes.push(byte);
+            } else {
+                break;
+            }
+        }
+        assert_eq!(decoded_bytes, input_bytes);
     }
 
     #[test]
