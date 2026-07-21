@@ -125,16 +125,20 @@ jobs:
           sudo sysctl -w kernel.perf_event_paranoid=-1
           sudo sysctl -w kernel.kptr_restrict=0
 
-      - name: Generate Flamegraph
+      - name: Generate Flamegraphs
         env:
           CARGO_PROFILE_RELEASE_DEBUG: "true"
           RUSTFLAGS: "--cfg no_inline"
         run: |
           dd if=/dev/urandom of=dummy.txt bs=1M count=100
-          cargo flamegraph --release --bin rust_zip -- -c -o dummy.zip dummy.txt
+          cargo flamegraph --release --bin rust_zip -o flamegraph_compression.svg -- -c -o dummy.zip dummy.txt
+          cargo flamegraph --release --bin rust_zip -o flamegraph_decompression.svg -- -x -o decompressed.txt dummy.zip
 
-      - name: Upload Flamegraph Artifact
+      - name: Upload Flamegraph Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: flamegraph
-          path: flamegraph.svg
+          path: |
+            flamegraph_compression.svg
+            flamegraph_decompression.svg
+

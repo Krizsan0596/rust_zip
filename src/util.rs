@@ -25,6 +25,11 @@ pub struct Config {
     pub max_threads: usize,
 }
 
+pub struct LUTEntry {
+    pub length: u8,
+    pub byte: u8,
+}
+
 pub struct SharedReader<'a> {
     file: &'a mut File,
     index: usize,
@@ -46,8 +51,9 @@ fn get_subtree(chunk: &[u8]) -> Tree {
 fn compress_chunk(chunk: &[u8], tree: &Tree) -> (Vec<u8>, u64) {
     let mut res = Vec::with_capacity(chunk.len());
     let mut writer = BitWriter::new(&mut res);
+    let cache = *tree.cache;
     for byte in chunk {
-        let bits = tree.find_leaf(*byte);
+        let bits = cache[*byte as usize];
         writer.push(bits.unwrap());
     }
     let bit_count = (writer.buffer.len() * 8 + writer.bit_count as usize) as u64;
