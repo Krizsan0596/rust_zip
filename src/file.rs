@@ -90,7 +90,7 @@ impl<'a> BitWriter<'a> {
 pub struct BitReader<'a> {
     buffer: &'a Vec<u8>,
     accumulator: u64,
-    bit_count: u8,
+    pub bit_count: u8,
     cursor: usize,
     bits_read: u64,
     total_bits: u64,
@@ -146,6 +146,43 @@ impl<'a> BitReader<'a> {
         self.bits_read += 1;
 
         Some(bit)
+    }
+
+    #[allow(dead_code)]
+    #[inline]
+    pub fn peek_byte(&self) -> Option<u8> {
+        if self.bits_read + 8 > self.total_bits {
+            return None;
+        }
+        if self.bit_count >= 8 {
+            return Some((self.accumulator >> 56) as u8);
+        }
+        let bits_from_accum = (self.accumulator >> 56) as u8;
+        let next_byte = self.buffer[self.cursor];
+        let bits_from_buffer = next_byte >> self.bit_count;
+        Some(bits_from_accum | bits_from_buffer)
+    }
+
+    #[allow(dead_code)]
+    #[inline]
+    pub fn seek(&mut self, mut n: u64) -> Option<()> {
+        if self.bits_read + n > self.total_bits {
+            return None;
+        }
+        while n > 0 {
+            if self.bit_count == 0 {
+                self.refill();
+                if self.bit_count == 0 {
+                    return None;
+                }
+            }
+            let consume = n.min(self.bit_count as u64) as u8;
+            self.accumulator <<= consume;
+            self.bit_count -= consume;
+            self.bits_read += consume as u64;
+            n -= consume as u64;
+        }
+        Some(())
     }
 }
 
@@ -343,6 +380,64 @@ mod tests {
             assert_eq!(reader.read_bit(), Some(false));
         }
         assert_eq!(reader.read_bit(), None);
+    }
+
+    #[test]
+    fn test_bit_reader_seek() {
+        let buffer = vec![0b1010_1100, 0b1111_0000];
+        // 10101100 11110000
+        
+        let mut reader = BitReader::new(&buffer, 16);
+        assert_eq!(reader.seek(0), Some(()));
+        assert_eq!(reader.read_bit(), Some(true)); // 1st bit (1)
+        assert_eq!(reader.seek(2), Some(())); // skip 2nd and 3rd bits (0, 1) -> 4th bit is next
+        assert_eq!(reader.read_bit(), Some(false)); // 4th bit (0)
+        
+        // Seek crossing byte boundary
+        let mut reader2 = BitReader::new(&buffer, 16);
+        assert_eq!(reader2.seek(9), Some(())); // skips 10101100 1 -> leaves 1110000
+        assert_eq!(reader2.read_bit(), Some(true));
+        assert_eq!(reader2.read_bit(), Some(true));
+        
+        // Seek out of bounds
+        let mut reader3 = BitReader::new(&buffer, 16);
+        assert_eq!(reader3.seek(17), None);
+    }
+
+    #[test]
+    fn test_bit_reader_peek_byte() {
+        let buffer = vec![0b10101100, 0b11110000, 0b01010101];
+        let mut reader = BitReader::new(&buffer, 24);
+
+        // Peek should return the first byte
+        assert_eq!(reader.peek_byte(), Some(0b10101100));
+        // Verify that state hasn't advanced (we can peek it again)
+        assert_eq!(reader.peek_byte(), Some(0b10101100));
+
+        // Consume 8 bits using read_bit
+        for _ in 0..8 {
+            assert!(reader.read_bit().is_some());
+        }
+
+        // Now next bit is 1, let's consume it
+        assert_eq!(reader.read_bit(), Some(true)); // next bit is 1
+
+        // Let's peek the next byte, which should span across byte boundaries
+        // Remaining bits of 0b11110000 are: 1110000 (7 bits)
+        // plus 1 bit from 0b01010101 (which is 0)
+        // total 8 bits should be 0b11100000 | 0b0 = 0b11100000 (224)
+        assert_eq!(reader.peek_byte(), Some(0b11100000));
+        // Verify we didn't consume it
+        assert_eq!(reader.peek_byte(), Some(0b11100000));
+
+        // Read those 8 bits using read_bit to advance
+        for _ in 0..8 {
+            assert!(reader.read_bit().is_some());
+        }
+
+        // Remaining bits in 0b01010101 are: 1010101 (7 bits left)
+        // calling peek_byte() now should return None because only 7 bits are left
+        assert_eq!(reader.peek_byte(), None);
     }
 
     #[test]

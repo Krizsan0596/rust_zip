@@ -25,6 +25,11 @@ pub struct Config {
     pub max_threads: usize,
 }
 
+pub struct LUTEntry {
+    pub length: u8,
+    pub byte: u8,
+}
+
 pub struct SharedReader<'a> {
     file: &'a mut File,
     index: usize,

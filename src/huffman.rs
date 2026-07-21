@@ -1,4 +1,4 @@
-use crate::file::BitReader;
+use crate::{file::BitReader, util::LUTEntry};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Leaf {
@@ -189,6 +189,24 @@ impl Tree {
             nodes,
             cache: Box::new([None; 256]),
         }
+    }
+
+    pub fn build_lut(&self) -> Vec<LUTEntry> {
+        let mut res: Vec<LUTEntry> = (0..256).map(|_| LUTEntry { length: 0, byte: 0 }).collect();
+        let mut bytes = vec![0u8; 1];
+
+        for byte in 0..256 {
+            bytes[0] = byte as u8;
+            let mut reader = BitReader::new(&bytes, 8);
+            if let Some(val) = self.get_next_leaf(&mut reader) {
+                res[byte] = LUTEntry {
+                    length: 8 - reader.bit_count,
+                    byte: val,
+                };
+            }
+        }
+
+        res
     }
 }
 
