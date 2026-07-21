@@ -1,5 +1,7 @@
 mod util;
-use util::{ArgError, Config, print_usage, process_args, parallel_compression, parallel_frequency_count};
+use util::{
+    ArgError, Config, parallel_compression, parallel_frequency_count, print_usage, process_args,
+};
 
 mod file;
 use file::{BitReader, HuffmanFile, create_output, get_chunk, open_file, write_chunk};
@@ -8,7 +10,6 @@ use std::io::{BufWriter, Seek, Write};
 
 mod huffman;
 use huffman::Tree;
-
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -167,23 +168,24 @@ fn main() {
         let mut count = 0;
 
         loop {
-            if let Some(byte) = reader.peek_byte() {
-                if let res = &lut[byte as usize] && res.length > 0 {
-                    buffer[count] = res.byte;
-                    count += 1;
-                    if count == buffer.len() {
-                        if let Err(e) = writer.write_all(&buffer) {
-                            eprintln!("Error writing to file '{}': {}", opts.output_file, e);
-                            std::process::exit(1);
-                        }
-                        count = 0;
+            if let Some(byte) = reader.peek_byte()
+                && let res = &lut[byte as usize]
+                && res.length > 0
+            {
+                buffer[count] = res.byte;
+                count += 1;
+                if count == buffer.len() {
+                    if let Err(e) = writer.write_all(&buffer) {
+                        eprintln!("Error writing to file '{}': {}", opts.output_file, e);
+                        std::process::exit(1);
                     }
-
-                    reader.seek(res.length as u64);
-                    continue;
+                    count = 0;
                 }
+
+                reader.seek(res.length as u64);
+                continue;
             }
-            
+
             match tree.get_next_leaf(&mut reader) {
                 Some(byte) => {
                     buffer[count] = byte;
@@ -196,15 +198,15 @@ fn main() {
                         count = 0;
                     }
                 }
-                None => break
+                None => break,
             }
         }
 
-        if count > 0 {
-            if let Err(e) = writer.write_all(&buffer[..count]) {
-                eprintln!("Error writing to file '{}': {}", opts.output_file, e);
-                std::process::exit(1);
-            }
+        if count > 0
+            && let Err(e) = writer.write_all(&buffer[..count])
+        {
+            eprintln!("Error writing to file '{}': {}", opts.output_file, e);
+            std::process::exit(1);
         }
 
         if let Err(e) = writer.flush() {

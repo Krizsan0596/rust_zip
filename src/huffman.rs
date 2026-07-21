@@ -98,11 +98,7 @@ impl Tree {
         }
         if self.nodes.len() == 1 {
             let freq = self.nodes[0].as_ref().unwrap().frequency();
-            self.nodes.push(Some(Node::Branch(Branch::new(
-                freq,
-                0,
-                0,
-            ))));
+            self.nodes.push(Some(Node::Branch(Branch::new(freq, 0, 0))));
             self.root = Some(1);
             return Ok(());
         }
@@ -201,6 +197,7 @@ impl Tree {
         let mut res: Vec<LUTEntry> = (0..256).map(|_| LUTEntry { length: 0, byte: 0 }).collect();
         let mut bytes = vec![0u8; 1];
 
+        #[allow(clippy::needless_range_loop)]
         for byte in 0..256 {
             bytes[0] = byte as u8;
             let mut reader = BitReader::new(&bytes, 8);

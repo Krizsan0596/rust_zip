@@ -386,19 +386,19 @@ mod tests {
     fn test_bit_reader_seek() {
         let buffer = vec![0b1010_1100, 0b1111_0000];
         // 10101100 11110000
-        
+
         let mut reader = BitReader::new(&buffer, 16);
         assert_eq!(reader.seek(0), Some(()));
         assert_eq!(reader.read_bit(), Some(true)); // 1st bit (1)
         assert_eq!(reader.seek(2), Some(())); // skip 2nd and 3rd bits (0, 1) -> 4th bit is next
         assert_eq!(reader.read_bit(), Some(false)); // 4th bit (0)
-        
+
         // Seek crossing byte boundary
         let mut reader2 = BitReader::new(&buffer, 16);
         assert_eq!(reader2.seek(9), Some(())); // skips 10101100 1 -> leaves 1110000
         assert_eq!(reader2.read_bit(), Some(true));
         assert_eq!(reader2.read_bit(), Some(true));
-        
+
         // Seek out of bounds
         let mut reader3 = BitReader::new(&buffer, 16);
         assert_eq!(reader3.seek(17), None);
